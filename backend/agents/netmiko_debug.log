@@ -1,0 +1,58 @@
+DEBUG:paramiko.transport:starting thread (client mode): 0x50753140
+DEBUG:paramiko.transport:Local version/idstring: SSH-2.0-paramiko_4.0.0
+DEBUG:paramiko.transport:Remote version/idstring: SSH-1.99--
+INFO:paramiko.transport:Connected (version 1.99, client -)
+DEBUG:paramiko.transport:=== Key exchange possibilities ===
+DEBUG:paramiko.transport:kex algos: diffie-hellman-group1-sha1, diffie-hellman-group-exchange-sha1
+DEBUG:paramiko.transport:server key: ssh-rsa, ssh-dss
+DEBUG:paramiko.transport:client encrypt: aes128-cbc, 3des-cbc, des-cbc
+DEBUG:paramiko.transport:server encrypt: aes128-cbc, 3des-cbc, des-cbc
+DEBUG:paramiko.transport:client mac: hmac-sha1, hmac-sha1-96, hmac-md5, hmac-md5-96
+DEBUG:paramiko.transport:server mac: hmac-sha1, hmac-sha1-96, hmac-md5, hmac-md5-96
+DEBUG:paramiko.transport:client compress: none, zlib
+DEBUG:paramiko.transport:server compress: none, zlib
+DEBUG:paramiko.transport:client lang: <none>
+DEBUG:paramiko.transport:server lang: <none>
+DEBUG:paramiko.transport:kex follows: False
+DEBUG:paramiko.transport:=== Key exchange agreements ===
+DEBUG:paramiko.transport:Kex: diffie-hellman-group-exchange-sha1
+DEBUG:paramiko.transport:HostKey: ssh-rsa
+DEBUG:paramiko.transport:Cipher: aes128-cbc
+DEBUG:paramiko.transport:MAC: hmac-sha1
+DEBUG:paramiko.transport:Compression: none
+DEBUG:paramiko.transport:=== End of kex handshake ===
+DEBUG:paramiko.transport:Got server p (2048 bits)
+DEBUG:paramiko.transport:kex engine KexGex specified hash_algo <built-in function openssl_sha1>
+DEBUG:paramiko.transport:Switch to new keys ...
+DEBUG:paramiko.transport:Adding ssh-rsa host key for 192.168.56.10: b'33bb55756c796cc0e5b4f45f60ea4340'
+DEBUG:paramiko.transport:userauth is OK
+DEBUG:paramiko.transport:EOF in transport thread
+DEBUG:paramiko.transport:starting thread (client mode): 0x64cf67b0
+DEBUG:paramiko.transport:Local version/idstring: SSH-2.0-paramiko_4.0.0
+DEBUG:paramiko.transport:Remote version/idstring: SSH-1.99--
+INFO:paramiko.transport:Connected (version 1.99, client -)
+DEBUG:paramiko.transport:=== Key exchange possibilities ===
+DEBUG:paramiko.transport:kex algos: diffie-hellman-group1-sha1, diffie-hellman-group-exchange-sha1
+DEBUG:paramiko.transport:server key: ssh-rsa, ssh-dss
+DEBUG:paramiko.transport:client encrypt: aes128-cbc, 3des-cbc, des-cbc
+DEBUG:paramiko.transport:server encrypt: aes128-cbc, 3des-cbc, des-cbc
+DEBUG:paramiko.transport:client mac: hmac-sha1, hmac-sha1-96, hmac-md5, hmac-md5-96
+DEBUG:paramiko.transport:server mac: hmac-sha1, hmac-sha1-96, hmac-md5, hmac-md5-96
+DEBUG:paramiko.transport:client compress: none, zlib
+DEBUG:paramiko.transport:server compress: none, zlib
+DEBUG:paramiko.transport:client lang: <none>
+DEBUG:paramiko.transport:server lang: <none>
+DEBUG:paramiko.transport:kex follows: False
+DEBUG:paramiko.transport:=== Key exchange agreements ===
+DEBUG:paramiko.transport:Kex: diffie-hellman-group-exchange-sha1
+DEBUG:paramiko.transport:HostKey: ssh-rsa
+DEBUG:paramiko.transport:Cipher: aes128-cbc
+DEBUG:paramiko.transport:MAC: hmac-sha1
+DEBUG:paramiko.transport:Compression: none
+DEBUG:paramiko.transport:=== End of kex handshake ===
+DEBUG:paramiko.transport:Got server p (2048 bits)
+DEBUG:paramiko.transport:kex engine KexGex specified hash_algo <built-in function openssl_sha1>
+DEBUG:paramiko.transport:Switch to new keys ...
+DEBUG:paramiko.transport:Adding ssh-rsa host key for 192.168.56.10: b'33bb55756c796cc0e5b4f45f60ea4340'
+DEBUG:paramiko.transport:userauth is OK
+DEBUG:paramiko.transport:EOF in transport thread

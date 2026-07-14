@@ -1,0 +1,9 @@
+{
+  "python.analysis.extraPaths": [
+    "./backend/agents",
+    "./backend/vectorstore",
+    "./backend/ingestion",
+    "./backend"
+  ],
+  "python.defaultInterpreterPath": "./.venv/Scripts/python.exe"
+}

@@ -1,0 +1,30 @@
+# Export manuel pour R3 (192.168.3.1)
+# Copiez-collez le terminal eNSP dans ce fichier
+# Commandes à exécuter :
+
+[R3]display version
+--- résultat ici ---
+
+[R3]display current-configuration
+--- résultat ici ---
+
+[R3]display ip routing-table
+--- résultat ici ---
+
+[R3]display interface brief
+--- résultat ici ---
+
+[R3]display ospf peer
+--- résultat ici ---
+
+[R3]display ospf routing
+--- résultat ici ---
+
+[R3]display ip interface brief
+--- résultat ici ---
+
+[R3]display cpu-usage
+--- résultat ici ---
+
+[R3]display memory-usage
+--- résultat ici ---

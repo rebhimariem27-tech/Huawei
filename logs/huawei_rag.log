@@ -1,0 +1,176 @@
+2026-07-09 09:27:04 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 09:39:37 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-09 09:39:46 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 09:39:47 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 09:59:39 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-09 09:59:43 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 09:59:44 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 10:06:31 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 10:06:36 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 10:06:36 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 10:33:26 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 10:33:32 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 10:33:32 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 10:44:31 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-09 10:44:36 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 10:44:37 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 11:24:45 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 11:24:50 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 11:24:51 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 11:28:28 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-09 11:28:34 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 11:28:34 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 12:31:46 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-09 13:09:56 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 13:11:53 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-09 13:17:11 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 13:17:33 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-09 13:17:37 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 13:17:38 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 13:21:12 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 13:21:16 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 13:21:17 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 14:01:31 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 14:01:36 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 14:01:37 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 14:02:32 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 14:02:37 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 14:02:37 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 14:14:40 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 14:14:44 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 14:14:45 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 15:00:07 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-09 15:07:04 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 15:07:08 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 15:07:09 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 15:32:00 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 15:32:06 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 15:32:07 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 15:37:43 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 15:37:48 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 15:37:49 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 15:44:50 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-09 15:44:54 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 15:44:55 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-09 15:48:04 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-09 15:48:09 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-09 15:48:09 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-10 09:46:05 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-10 09:46:14 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 09:49:30 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 09:50:49 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 09:52:25 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-10 09:52:29 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 09:58:41 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-10 09:58:47 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 09:58:49 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-10 10:02:37 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-10 10:02:43 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 10:12:45 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-10 10:12:50 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 10:16:38 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-10 10:16:43 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 14:11:39 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-10 14:11:45 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 14:12:33 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-10 14:12:38 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 14:18:49 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-10 14:18:53 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-10 14:18:54 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-11 20:07:46 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-11 20:08:48 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 09:38:59 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 09:40:42 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 09:40:46 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 09:40:47 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 09:41:42 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 09:41:46 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 09:41:46 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 09:51:11 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 09:51:22 | WARNING  | huggingface_hub.utils._http    | Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-13 09:53:57 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 09:53:58 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 10:00:07 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 10:00:12 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 10:00:13 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 10:02:57 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 10:03:01 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 10:03:01 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 10:03:50 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 10:03:55 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 10:03:55 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 10:22:31 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 10:22:35 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 10:22:36 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 10:25:21 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 10:25:25 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 10:25:26 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 10:26:27 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 10:26:30 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 10:26:31 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 10:36:58 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 10:37:02 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 10:37:02 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 10:39:59 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 10:40:03 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 10:40:03 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 10:57:00 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 10:57:04 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 10:57:05 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 11:05:42 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 11:05:46 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 11:05:47 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 11:06:59 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 11:07:00 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 11:08:11 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 11:08:14 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 11:08:15 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 11:09:01 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 11:09:04 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 11:09:04 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 11:10:01 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 11:10:02 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 11:15:05 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 11:15:08 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 11:15:08 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 11:19:19 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 11:19:22 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 11:19:23 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 12:32:47 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 12:35:15 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 12:44:53 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 12:53:48 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 12:53:53 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 12:53:53 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 12:54:36 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 12:54:41 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 12:54:41 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 12:55:09 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 12:55:10 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 12:59:10 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 12:59:14 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 12:59:15 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 14:46:46 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 14:46:51 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 14:46:51 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 14:47:45 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 14:47:50 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 14:47:50 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 14:59:29 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 14:59:34 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 14:59:34 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 15:01:56 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-13 15:02:00 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 15:02:01 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-13 15:04:19 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-13 15:04:24 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-13 15:04:24 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-14 08:57:41 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-14 08:57:47 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-14 08:57:47 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-14 08:59:27 | INFO     | architect_agent                | Topologie chargée : {'R1', 'S1'}
+2026-07-14 08:59:33 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-14 08:59:34 | INFO     | paramiko.transport             | Authentication (password) successful!
+2026-07-14 09:02:49 | INFO     | architect_agent                | Topologie chargée : {'S1', 'R1'}
+2026-07-14 09:02:53 | INFO     | paramiko.transport             | Connected (version 1.99, client -)
+2026-07-14 09:02:54 | INFO     | paramiko.transport             | Authentication (password) successful!

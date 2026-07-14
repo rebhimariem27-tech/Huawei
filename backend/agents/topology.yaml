@@ -1,0 +1,24 @@
+network_name: "Lab eNSP - TP Huawei"
+management_subnet: "192.168.56.0/24"
+ssh_defaults:
+  username: "admin"
+  password: "huawei"
+  port: 22
+  timeout: 90
+
+devices:
+  - name: S1
+    type: switch
+    protocol: ssh
+    mgmt_ip: 192.168.56.11
+    mgmt_interface: Vlanif1
+    description: "Switch principal"
+  - name: R1
+    type: router
+    protocol: telnet
+    mgmt_ip: 192.168.56.10
+    mgmt_interface: GigabitEthernet0/0/0
+    port: 23
+    username: "admin"
+    password: "huawei"
+    description: "Routeur principal (Telnet - bug SSH VRP)"

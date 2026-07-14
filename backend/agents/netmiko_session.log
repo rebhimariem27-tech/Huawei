@@ -1,0 +1,22 @@
+
+
+
+Login authentication
+
+
+Username:admin
+Password:
+Info: The max number of VTY users is 10, and the number
+      of current VTY users on line is 1.
+      The current login time is 2026-07-11 19:56:06.
+<R1>
+<R1>
+<R1>screen-length 0 temporary
+Info: The configuration takes effect on the current user terminal interface only.
+<R1>display version
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.110 (eNSP V100R001C00)
+Copyright (c) 2000-2011 HUAWEI TECH CO., LTD
+
+<R1>
+<R1>quit

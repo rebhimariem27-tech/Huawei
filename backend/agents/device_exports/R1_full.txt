@@ -1,0 +1,30 @@
+# Export manuel pour R1 (192.168.1.1)
+# Copiez-collez le terminal eNSP dans ce fichier
+# Commandes à exécuter :
+
+[R1]display version
+--- résultat ici ---
+
+[R1]display current-configuration
+--- résultat ici ---
+
+[R1]display ip routing-table
+--- résultat ici ---
+
+[R1]display interface brief
+--- résultat ici ---
+
+[R1]display ospf peer
+--- résultat ici ---
+
+[R1]display ospf routing
+--- résultat ici ---
+
+[R1]display ip interface brief
+--- résultat ici ---
+
+[R1]display cpu-usage
+--- résultat ici ---
+
+[R1]display memory-usage
+--- résultat ici ---

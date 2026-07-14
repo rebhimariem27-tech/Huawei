@@ -1,0 +1,5 @@
+=== ÉTAT ÉQUIPEMENT R1 ===
+Type        : router
+IP mgmt     : 192.168.56.250
+Source      : FILE (fichier exporté)
+Collecté le : 2026-06-29T19:39:48.848855

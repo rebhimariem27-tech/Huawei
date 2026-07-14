@@ -1,0 +1,16 @@
+{
+  "device_name": "R1",
+  "device_type": "router",
+  "mgmt_ip": "192.168.56.250",
+  "access_mode": "file",
+  "collected_at": "2026-06-29T19:39:48.848855",
+  "version_info": {},
+  "interfaces": [],
+  "vlans": [],
+  "routes": [],
+  "ospf_peers": [],
+  "cpu_usage": null,
+  "memory_usage": null,
+  "errors": [],
+  "is_complete": true
+}

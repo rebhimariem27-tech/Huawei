@@ -1,0 +1,105 @@
+/* frontend/app/globals.css
+   -----------------------------------------------------------------------
+   Système de tokens du projet — un seul endroit à modifier pour changer
+   la palette ou la typo de tout le frontend.
+
+   DIRECTION DE DESIGN :
+   L'outil est un assistant réseau pour ingénieurs Huawei (VRP CLI).
+   La typo mono et la bannière d'en-tête empruntent volontairement au
+   vocabulaire d'un terminal VRP ("<NetRAG> display system-status"),
+   plutôt qu'un habillage SaaS générique.
+   ------------------------------------------------------------------------ */
+
+:root {
+  /* Fond / surfaces */
+  --bg: #0a0e12;
+  --surface: #12171d;
+  --surface-raised: #1a2028;
+  --border: #232b33;
+
+  /* Texte */
+  --text: #e7ebee;
+  --text-dim: #8b98a5;
+  --text-faint: #5a6572;
+
+  /* Accents — chacun a un sens fonctionnel précis, pas décoratif */
+  --accent-live: #4fd1c5; /* données terrain / SSH live / connecté */
+  --accent-warn: #e8a33d; /* alertes warning, confiance moyenne */
+  --accent-critical: #e5484d; /* alertes critiques, interfaces down */
+
+  /* Typo */
+  --font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: var(--font-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
+
+  --radius: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+/* Accessibilité : focus clavier toujours visible */
+:focus-visible {
+  outline: 2px solid var(--accent-live);
+  outline-offset: 2px;
+}
+
+/* Respect des préférences de mouvement réduit */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes pulse-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.status-dot--live {
+  background: var(--accent-live);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-live) 20%, transparent);
+  animation: pulse-live 2.2s ease-in-out infinite;
+}
+
+.status-dot--warn {
+  background: var(--accent-warn);
+}
+
+.status-dot--critical {
+  background: var(--accent-critical);
+}
+
+.status-dot--offline {
+  background: var(--text-faint);
+}

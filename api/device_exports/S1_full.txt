@@ -1,0 +1,23 @@
+# Export S1 (192.168.56.11)
+# Copiez-collez le terminal eNSP ici
+
+[S1]display version
+--- résultat ---
+
+[S1]display current-configuration
+--- résultat ---
+
+[S1]display vlan
+--- résultat ---
+
+[S1]display interface brief
+--- résultat ---
+
+[S1]display ip routing-table
+--- résultat ---
+
+[S1]display cpu-usage
+--- résultat ---
+
+[S1]display stp brief
+--- résultat ---

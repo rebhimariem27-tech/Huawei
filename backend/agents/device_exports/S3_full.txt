@@ -1,0 +1,27 @@
+# Export manuel pour S3 (192.168.3.11)
+# Copiez-collez le terminal eNSP dans ce fichier
+# Commandes à exécuter :
+
+[S3]display version
+--- résultat ici ---
+
+[S3]display current-configuration
+--- résultat ici ---
+
+[S3]display vlan
+--- résultat ici ---
+
+[S3]display interface brief
+--- résultat ici ---
+
+[S3]display ip routing-table
+--- résultat ici ---
+
+[S3]display cpu-usage
+--- résultat ici ---
+
+[S3]display memory-usage
+--- résultat ici ---
+
+[S3]display stp brief
+--- résultat ici ---

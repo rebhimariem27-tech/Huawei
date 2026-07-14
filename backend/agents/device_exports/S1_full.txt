@@ -1,0 +1,27 @@
+# Export manuel pour S1 (192.168.1.11)
+# Copiez-collez le terminal eNSP dans ce fichier
+# Commandes à exécuter :
+
+[S1]display version
+--- résultat ici ---
+
+[S1]display current-configuration
+--- résultat ici ---
+
+[S1]display vlan
+--- résultat ici ---
+
+[S1]display interface brief
+--- résultat ici ---
+
+[S1]display ip routing-table
+--- résultat ici ---
+
+[S1]display cpu-usage
+--- résultat ici ---
+
+[S1]display memory-usage
+--- résultat ici ---
+
+[S1]display stp brief
+--- résultat ici ---

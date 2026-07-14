@@ -1,0 +1,27 @@
+# Export manuel pour S2 (192.168.2.11)
+# Copiez-collez le terminal eNSP dans ce fichier
+# Commandes à exécuter :
+
+[S2]display version
+--- résultat ici ---
+
+[S2]display current-configuration
+--- résultat ici ---
+
+[S2]display vlan
+--- résultat ici ---
+
+[S2]display interface brief
+--- résultat ici ---
+
+[S2]display ip routing-table
+--- résultat ici ---
+
+[S2]display cpu-usage
+--- résultat ici ---
+
+[S2]display memory-usage
+--- résultat ici ---
+
+[S2]display stp brief
+--- résultat ici ---
