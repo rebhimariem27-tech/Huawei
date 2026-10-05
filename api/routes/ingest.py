@@ -21,17 +21,21 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, File, HTTPException, Path, UploadFile
-
+from fastapi import Path as FastAPIPath   # si jamais tu as besoin du vrai fastapi.Path ailleurs
+from pathlib import Path
 from dependencies import (
     FILES_MANIFEST,
     INGESTION_AVAILABLE,
+    ROOT_DIR, 
     UPLOADS_DIR,
     run_ingestion,
 )
+LAST_UPLOAD_FILE = ROOT_DIR / "state" / "last_uploaded.json"
+LAST_UPLOAD_FILE.parent.mkdir(parents=True, exist_ok=True)
 from schemas import FileEntry, IngestResponse
 
 router = APIRouter(tags=["ingest"])
-
+ROOT_DIR = Path(__file__).parent.parent.parent
 
 # ---------------------------------------------------------------------------
 # POST /ingest
@@ -81,10 +85,12 @@ async def ingest(file: UploadFile = File(...)) -> IngestResponse:
         chunks_indexed=chunks_indexed,
     )
     _append_to_manifest(entry)
+    if status == "success":
+        _write_last_uploaded(file.filename) 
 
     if status == "error":
         raise HTTPException(status_code=500, detail=message)
-
+    
     return IngestResponse(
         filename=file.filename,
         file_id=file_id,
@@ -92,7 +98,14 @@ async def ingest(file: UploadFile = File(...)) -> IngestResponse:
         chunks_indexed=chunks_indexed,
         message=message,
     )
-
+def _write_last_uploaded(filename: str) -> None:
+    LAST_UPLOAD_FILE.write_text(
+        json.dumps({
+            "filename": filename,
+            "ingested_at": datetime.now().isoformat(),
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
 def _append_to_manifest(entry: FileEntry) -> None:
     try:
@@ -119,10 +132,25 @@ def list_files() -> list[FileEntry]:
     return [FileEntry(**entry) for entry in manifest]
 
 from fastapi.responses import FileResponse
+REPORTS_ROOT = ROOT_DIR / "reports" 
 
 @router.get("/reports/{filename}")
 def download_report(filename: str):
-    filepath = Path("reports") / filename
+    filepath = ROOT_DIR / "reports" / filename
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Rapport introuvable")
-    return FileResponse(filepath, media_type="text/markdown", filename=filename)
+    return FileResponse(filepath, media_type="application/pdf", filename=filename)
+@router.get("/reports")
+def list_reports():
+    """Liste tous les rapports générés, triés du plus récent au plus ancien."""
+    REPORTS_ROOT.mkdir(exist_ok=True)
+    reports = []
+    for f in REPORTS_ROOT.glob("*.pdf"):
+        stat = f.stat()
+        reports.append({
+            "filename": f.name,
+            "size_bytes": stat.st_size,
+            "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        })
+    reports.sort(key=lambda r: r["created_at"], reverse=True)
+    return reports

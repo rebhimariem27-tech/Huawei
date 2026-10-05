@@ -1,6 +1,6 @@
 [
   {
-    "chunk_id": "b6f83425-b2d0-41da-86d6-f61f256ac20c",
+    "chunk_id": "54dce750-607f-4d1c-9140-0b719b7ae8fd",
     "content": "GUIDE DE CONFIGURATION STANDARD - LAB 5G HUAWEI\nDocument ID: HUA-2026-TP1 \nVersion: 2.0 \nStatut: Officiel",
     "chunk_type": "text",
     "page_number": 1,
@@ -17,31 +17,34 @@
     "merged": true
   },
   {
-    "chunk_id": "bd4c5625-a2c3-4a72-8f8c-1556d5c12ebf",
-    "content": "L'image représente une topologie de réseau simple comprenant plusieurs éléments. Un nuage (Cloud3) est connecté à un commutateur (SW1) via un lien Ethernet étiqueté \"Ethernet 0/0/1\". Le commutateur SW1 est lui-même connecté à un routeur (R1) via un lien Gigabit Ethernet étiqueté \"GE 0/0/1\". Le routeur est identifié par \"R1\".\n\nÉléments clés : Cloud3, SW1, R1, Ethernet 0/0/1, GE 0/0/1\n\nTermes techniques : commutateur, routeur, lien Ethernet, Gigabit Ethernet",
+    "chunk_id": "e9006d68-c855-43d2-9a55-aea18c7f93d3",
+    "content": "** Describe the topology. Mention the cloud, the switch (LSW1), and the router (R1). Mention the connections and interface labels. Note that it looks like a simulation environment (eNSP).\n*   **\n\nÉléments clés : ** Cloud3, LSW1, R1, Ethernet 0/0/1, GE 0/0/1.\n*   **\n\nTermes techniques : ** Cloud, Switch, Router, Gigabit Ethernet, Interface, Topology, eNSP (implied by style).\n*   **",
     "chunk_type": "image_desc",
     "page_number": 1,
     "source_file": "Test2.pdf",
     "chunk_index": 1,
     "section_title": "",
-    "char_count": 460,
+    "char_count": 383,
     "original_type": "image",
     "bbox_y0": 221.6,
     "position_ratio": 0.095,
     "vision_category": "network_topology",
-    "vision_confidence": 1.0,
+    "vision_confidence": 0.8,
     "vision_key_elements": [
-      "Cloud3",
-      "SW1",
+      "** Cloud3",
+      "LSW1",
       "R1",
       "Ethernet 0/0/1",
-      "GE 0/0/1"
+      "GE 0/0/1.\n*   **"
     ],
     "vision_terms": [
-      "commutateur",
-      "routeur",
-      "lien Ethernet",
-      "Gigabit Ethernet"
+      "** Cloud",
+      "Switch",
+      "Router",
+      "Gigabit Ethernet",
+      "Interface",
+      "Topology",
+      "eNSP (implied by style).\n*   **"
     ],
     "vision_is_mock": false,
     "image_path": "",
@@ -52,12 +55,12 @@
     "source": "hd_render",
     "render_dpi": 200,
     "total_chunks": 13,
-    "vision_description": "L'image représente une topologie de réseau simple comprenant plusieurs éléments. Un nuage (Cloud3) est connecté à un commutateur (SW1) via un lien Ethernet étiqueté \"Ethernet 0/0/1\". Le commutateur SW1 est lui-même connecté à un routeur (R1) via un lien Gigabit Ethernet étiqueté \"GE 0/0/1\". Le routeur est identifié par \"R1\".",
-    "vision_searchable": "L'image représente une topologie de réseau simple comprenant plusieurs éléments. Un nuage (Cloud3) est connecté à un commutateur (SW1) via un lien Ethernet étiqueté \"Ethernet 0/0/1\". Le commutateur SW1 est lui-même connecté à un routeur (R1) via un lien Gigabit Ethernet étiqueté \"GE 0/0/1\". Le routeur est identifié par \"R1\".\n\nÉléments clés : Cloud3, SW1, R1, Ethernet 0/0/1, GE 0/0/1\n\nTermes techniques : commutateur, routeur, lien Ethernet, Gigabit Ethernet",
-    "vision_tokens_used": 1913
+    "vision_description": "** Describe the topology. Mention the cloud, the switch (LSW1), and the router (R1). Mention the connections and interface labels. Note that it looks like a simulation environment (eNSP).\n*   **",
+    "vision_searchable": "** Describe the topology. Mention the cloud, the switch (LSW1), and the router (R1). Mention the connections and interface labels. Note that it looks like a simulation environment (eNSP).\n*   **\n\nÉléments clés : ** Cloud3, LSW1, R1, Ethernet 0/0/1, GE 0/0/1.\n*   **\n\nTermes techniques : ** Cloud, Switch, Router, Gigabit Ethernet, Interface, Topology, eNSP (implied by style).\n*   **",
+    "vision_tokens_used": 2637
   },
   {
-    "chunk_id": "a3431250-5d56-470e-bcec-bd500b89001a",
+    "chunk_id": "063872ed-3ec5-46ac-b8eb-87546f4499fa",
     "content": "La topologie se compose d'un routeur de bordure (R1) et d'un switch de distribution (S1) \nreliés au Cloud de gestion.",
     "chunk_type": "text",
     "page_number": 1,
@@ -73,7 +76,7 @@
     "total_chunks": 13
   },
   {
-    "chunk_id": "9e31d770-75b2-464e-9e30-90dee89845e7",
+    "chunk_id": "8a09434d-2ef4-4416-b20a-383557178054",
     "content": "2. Standards de Nommage (Hostnames)\nTous les équipements doivent suivre la nomenclature suivante :",
     "chunk_type": "text",
     "page_number": 1,
@@ -90,7 +93,7 @@
     "merged": true
   },
   {
-    "chunk_id": "90b0ac7b-90d7-499f-8e89-c1a748f584d1",
+    "chunk_id": "ccff70b5-cb82-4b6f-8d56-4caeb08053eb",
     "content": "• \nLe switch principal doit être nommé : S1-CORE-SWITCH\n• \nLe routeur principal doit être nommé : R1-GW-OFFICE",
     "chunk_type": "text",
     "page_number": 1,
@@ -107,7 +110,7 @@
     "merged": true
   },
   {
-    "chunk_id": "ffe9edf2-71ce-4959-b687-c285d5eaa88a",
+    "chunk_id": "6c179407-1a3d-48d0-9eb1-d349389eb5d4",
     "content": "3. Segmentation VLAN (Switch S1)\nPour garantir la sécurité du réseau, le switch S1 doit impérativement avoir les VLANs suivants \nconfigurés :",
     "chunk_type": "text",
     "page_number": 1,
@@ -124,7 +127,7 @@
     "merged": true
   },
   {
-    "chunk_id": "0baf0c58-e209-4a7f-a50d-2d3f5f38c7f0",
+    "chunk_id": "993c2412-ce77-4860-87b6-5acb23db93e5",
     "content": "• \nVLAN 10 : Département Ingénierie",
     "chunk_type": "text",
     "page_number": 1,
@@ -140,7 +143,7 @@
     "total_chunks": 13
   },
   {
-    "chunk_id": "1c81d964-13db-4928-b151-9416c239cf70",
+    "chunk_id": "a18d430d-39da-4bec-929d-dae8c6dfc18a",
     "content": "• \nVLAN 20 : Département Administration\n• \nVLAN 99 : Management (Utilisé pour l'IP 192.168.56.11)",
     "chunk_type": "code_cli",
     "page_number": 2,
@@ -157,7 +160,7 @@
     "merged": true
   },
   {
-    "chunk_id": "50157c64-2015-4d12-b4c1-efad95a46851",
+    "chunk_id": "cbc7d499-931e-4e7d-a2b1-6213540769a8",
     "content": "Instruction de port : L'interface GigabitEthernet 0/0/2 doit être configurée en \nmode access dans le VLAN 10.",
     "chunk_type": "text",
     "page_number": 2,
@@ -173,7 +176,7 @@
     "total_chunks": 13
   },
   {
-    "chunk_id": "4bfac334-6a3e-4bf9-b884-762aeabebe09",
+    "chunk_id": "fe2d2807-494c-46b5-a9cd-da88dfb44211",
     "content": "4. Adressage IP et Routage\n• \nS1 (Vlanif 99) : 192.168.56.11/24\n• \nR1 (GE 0/0/0) : 192.168.56.10/24",
     "chunk_type": "text",
     "page_number": 2,
@@ -190,7 +193,7 @@
     "merged": true
   },
   {
-    "chunk_id": "406aade7-8c37-4450-bbfa-7ed0ca6aef9e",
+    "chunk_id": "716409dd-75af-40ab-a8b8-b1f0e1274e4f",
     "content": "• \nRoutage R1 : Une route statique doit exister vers le réseau de l'entreprise : \nip route-static 10.10.10.0 255.255.255.0 192.168.56.11",
     "chunk_type": "text",
     "page_number": 2,
@@ -206,7 +209,7 @@
     "total_chunks": 13
   },
   {
-    "chunk_id": "c1d7be1c-fea3-4ce0-990f-ed79b5ba3519",
+    "chunk_id": "fbf9f70c-c820-4677-8e37-93e57358b829",
     "content": "5. Sécurité et Accès\nLe protocole SSH (Stelnet) doit être activé sur tous les équipements.",
     "chunk_type": "text",
     "page_number": 2,
@@ -223,7 +226,7 @@
     "merged": true
   },
   {
-    "chunk_id": "e6b1ea8d-a7a3-4e45-a4b8-cebe53bd3013",
+    "chunk_id": "fd7053b3-83a0-4383-ab17-bff9978bd401",
     "content": "• \nTimeout : Le délai d'inactivité (idle-timeout) doit être fixé à 5 minutes.\n• \nUtilisateur : Un compte admin avec le niveau de privilège 15 est obligatoire.",
     "chunk_type": "text",
     "page_number": 2,

@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional
-
+from backend.llm.fallback_client import LLMFallbackClient
 from groq import Groq
 
 # Imports
@@ -126,7 +126,7 @@ class ValidatorResult:
 # 2. CONFIGURATION
 # ---------------------------------------------------------------------------
 
-GROQ_MODEL  = "llama-3.3-70b-versatile"
+GROQ_MODEL  = "openai/gpt-oss-120b"
 MAX_TOKENS  = 2048
 TEMPERATURE = 0.1
 CPU_THRESHOLD   = 70.0
@@ -138,56 +138,133 @@ MIN_CHUNKS_GOOD = 3
 # ---------------------------------------------------------------------------
 # 3. PROMPTS
 # ---------------------------------------------------------------------------
-
 VALIDATOR_SYSTEM_PROMPT = """Tu es l'Agent Validateur d'un système RAG multimodal \
 spécialisé en infrastructure réseau Huawei.
 
 Tu reçois :
-1. La question originale de l'ingénieur
-2. Une réponse préliminaire du Documentaliste
-3. Les sources RAG (chunks PDF)
-4. Les données terrain des équipements eNSP
-5. Les écarts détectés automatiquement (VLANs manquants, hostnames incorrects...)
+1. La question originale de l'ingénieur, ainsi que son INTENTION et sa STRATÉGIE
+2. Une réponse préliminaire du Documentaliste (RÉDACTION uniquement)
+3. Les sources RAG et données terrain (RÉDACTION uniquement)
+4. Des CONSTATS D'ÉTAT — faits factuels sur les protocoles mentionnés (configuré ou non,
+   actif ou non), à utiliser librement pour répondre aux questions d'état réel
+5. Les écarts détectés automatiquement — LA SEULE liste de non-conformités valide
+6. Les alertes CRITICAL/WARNING détectées automatiquement — les seuls problèmes de santé valides
+7. Les alertes INFO — purement informatives, jamais des problèmes à corriger
 
-Ta mission : valider, enrichir et finaliser la réponse.
+═══════════════════════════════════════════════════
+MODE DE RÉPONSE — ADAPTE-TOI À L'INTENTION DE LA QUESTION :
+═══════════════════════════════════════════════════
 
-RÈGLES :
-- Sois précis et technique — terminologie Huawei VRP correcte
-- Cite les sources : [Manuel p.X] ou [S1 SSH live]
-- Si des VLANs ou hostnames sont non conformes, explique PRÉCISÉMENT
-  ce qui manque et comment le corriger avec les commandes VRP exactes
-- Réponds en français"""
+MODE "ÉTAT RÉEL" (intention = status_check, diagnostic, ou toute question factuelle
+sur ce qui tourne actuellement sur un équipement, ex: "est-ce que OSPF est configuré",
+"quel est l'état des interfaces") :
+- Réponds FACTUELLEMENT à partir des CONSTATS D'ÉTAT et des données terrain fournies.
+- Une réponse positive est parfaitement valide et attendue : "OSPF est configuré sur R1
+  et fonctionne normalement (2 voisins en FULL)" est une bonne réponse même s'il n'y a
+  aucun écart à signaler.
+- Ne te limite PAS à la liste d'écarts pour ce mode — les constats d'état ne sont pas
+  des écarts, ce sont des réponses directes à la question posée.
 
+MODE "CONFORMITÉ / AUDIT" (intention = audit, comparison, ou question explicite sur la
+conformité vs le manuel, ex: "est-ce conforme ?", "quels sont les écarts ?") :
+- RÈGLE ABSOLUE — PÉRIMÈTRE STRICT : tu ne rapportes JAMAIS un écart, une non-conformité,
+  ou une action corrective qui n'apparaît pas explicitement dans la liste "ÉCARTS DÉTECTÉS"
+  ou dans les alertes CRITICAL/WARNING fournies plus bas.
+- Le contexte RAG et terrain sert uniquement à RÉDIGER et ILLUSTRER les écarts déjà
+  détectés (ex: citer le numéro de source), jamais à en découvrir de nouveaux.
+- N'attribue jamais une exigence VLAN ou interface à un équipement qui n'est pas
+  explicitement cité avec cette exigence dans les écarts fournis.
+- S'il n'y a aucun écart ni alerte CRITICAL/WARNING, dis clairement que la configuration
+  observée est conforme sur les points vérifiés, sans en inventer.
+
+DANS LES DEUX MODES :
+- Les alertes INFO restent des observations neutres, jamais des problèmes à corriger.
+- Sois précis et technique — terminologie Huawei VRP correcte.
+- Cite les sources : [Manuel p.X] ou [S1 SSH live].
+- NE CITE JAMAIS d'URL, de lien externe, ou de document que tu n'as pas reçu dans le contexte fourni.
+- Réponds en français.
+
+FORMAT DE SORTIE — OBLIGATOIRE :
+- Utilise TOUJOURS ce format Markdown, sans exception :
+
+  **Résumé**
+  - Réponds directement à la question de l'utilisateur.
+- Ne décris jamais ton raisonnement.
+- Ne mentionne jamais l'intention détectée.
+- Ne mentionne jamais le mode ("ÉTAT RÉEL" ou "CONFORMITÉ/AUDIT").
+- Ne dis jamais "La question concerne...", "Cette question relève de...", ou "Le mode est...".
+- Commence immédiatement par la réponse technique.
+  **Constats d'état**
+  | Équipement | Constat |
+  |---|---|
+  | S1 | ... |
+  (si aucun constat, omets entièrement cette section, ne mets pas de tableau vide)
+
+  **Écarts détectés**
+  | Équipement | Écart | Commande corrective | Source |
+  |---|---|---|---|
+  | S1 | Hostname incorrect (attendu S1-CORE-SWITCH, réel S1) | `sysname S1-CORE-SWITCH` | Manuel p.45 |
+  (si aucun écart : écris UNIQUEMENT la phrase "Aucun écart détecté." — pas de tableau)
+
+  **Alertes informatives**
+  | Équipement | Alerte |
+  |---|---|
+  | S1 | 24 interfaces DOWN, non documentées |
+  (si aucune alerte, omets la section)
+
+  **Recommandations**
+  - [action priorisée] (liste à puces, PAS un tableau)
+
+- Respecte STRICTEMENT la syntaxe Markdown GFM (ligne de séparation `|---|---|`).
+- N'ajoute jamais de ligne ou colonne vide pour "remplir" un tableau.
+- N'utilise JAMAIS de tableau pour le Résumé ou les Recommandations."""
 
 def build_validator_prompt(
-    original_query:     str,
-    preliminary_answer: str,
-    rag_context:        str,
-    device_context:     str,
-    alerts_text:        str,
-    discrepancies_text: str,
+    original_query:      str,
+    intent:                 str,
+    strategy:             str,
+    preliminary_answer:  str,
+    rag_context:         str,
+    device_context:      str,
+    protocol_facts_text:     str,
+    actionable_alerts_text: str,
+    info_alerts_text:    str,
+    discrepancies_text:  str,
 ) -> str:
     return f"""QUESTION : "{original_query}"
+INTENTION DÉTECTÉE : {intent}
+STRATÉGIE : {strategy}
 
-RÉPONSE PRÉLIMINAIRE :
+RÉPONSE PRÉLIMINAIRE (contexte de rédaction uniquement) :
 {preliminary_answer}
 
-SOURCES RAG :
+SOURCES RAG (contexte de rédaction uniquement, ne pas en tirer de nouveaux écarts) :
 {rag_context[:2000] if rag_context else "Aucune."}
 
-DONNÉES TERRAIN :
+DONNÉES TERRAIN (contexte de rédaction uniquement) :
 {device_context[:1500] if device_context else "Aucune."}
 
-ALERTES AUTOMATIQUES :
-{alerts_text if alerts_text else "Aucune alerte."}
+═══════════════════════════════════════════════════════
+CONSTATS D'ÉTAT (réponses factuelles aux questions sur l'état réel — à utiliser
+librement en MODE "ÉTAT RÉEL", à ignorer en MODE "CONFORMITÉ/AUDIT") :
+═══════════════════════════════════════════════════════
+{protocol_facts_text if protocol_facts_text else "Aucun constat d'état généré pour cette question."}
+
+═══════════════════════════════════════════════════════
+SEULE SOURCE DE VÉRITÉ POUR LES PROBLÈMES À RAPPORTER (mode conformité/audit) :
+═══════════════════════════════════════════════════════
+
+ALERTES ACTIONNABLES (CRITICAL/WARNING) :
+{actionable_alerts_text if actionable_alerts_text else "Aucune."}
 
 ÉCARTS DÉTECTÉS (théorie vs terrain) :
 {discrepancies_text if discrepancies_text else "Aucun écart détecté."}
 
-Valide et finalise la réponse. Pour chaque écart, fournis les commandes VRP \
-exactes pour corriger la configuration."""
+ALERTES INFORMATIVES (à mentionner sans les traiter comme des problèmes) :
+{info_alerts_text if info_alerts_text else "Aucune."}
 
-
+Détermine d'abord si la question relève du MODE "ÉTAT RÉEL" ou du MODE "CONFORMITÉ/AUDIT"
+selon l'intention détectée, puis rédige la réponse finale en conséquence."""
 # ---------------------------------------------------------------------------
 # 4. EXTRACTION VLAN PAR ÉQUIPEMENT
 # ---------------------------------------------------------------------------
@@ -352,6 +429,46 @@ def extract_vlans_per_device(rag_text: str) -> dict[str, set[int]]:
         
     return device_vlans
 
+def extract_expected_static_routes(rag_text: str) -> dict[str, list[dict]]:
+    """
+    Extrait les routes statiques attendues par équipement depuis le manuel.
+
+    Formats gérés :
+        "Routage R1 : ... ip route-static 10.10.10.0 255.255.255.0 192.168.56.11"
+        "ip route-static <réseau> <masque> <next-hop>"
+
+    STRATÉGIE : même logique de proximité que extract_vlans_per_device —
+    associe la route au device mentionné dans les lignes précédentes.
+    """
+    device_routes: dict[str, list[dict]] = {}
+    device_pattern = re.compile(r"\b((?:S|R|LSW|SW|GW)\d+(?:[-_][A-Z0-9]+)*)\b", re.IGNORECASE)
+    route_pattern = re.compile(
+        r"ip\s+route-static\s+(\d{1,3}(?:\.\d{1,3}){3})\s+"
+        r"(\d{1,3}(?:\.\d{1,3}){3})\s+"
+        r"(\d{1,3}(?:\.\d{1,3}){3})",
+        re.IGNORECASE
+    )
+
+    active_devices, lines_since_device, WINDOW_SIZE = set(), 999, 10
+    for line in rag_text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            lines_since_device += 1
+            continue
+
+        devices_on_line = {normalize_device_name(m.group(1)) for m in device_pattern.finditer(stripped)}
+        if devices_on_line:
+            active_devices, lines_since_device = devices_on_line, 0
+        else:
+            lines_since_device += 1
+
+        for m in route_pattern.finditer(stripped):
+            route = {"network": m.group(1), "mask": m.group(2), "next_hop": m.group(3)}
+            if active_devices and lines_since_device <= WINDOW_SIZE:
+                for dev in active_devices:
+                    device_routes.setdefault(dev, []).append(route)
+
+    return device_routes
 
 def extract_expected_hostnames(rag_text: str) -> dict[str, str]:
     """
@@ -387,7 +504,54 @@ def extract_expected_hostnames(rag_text: str) -> dict[str, str]:
                 expected[normalized] = hostname
 
     return expected
+IFACE_PATTERN = re.compile(
+    r"\b(GigabitEthernet|GE|FastEthernet|FE|Ethernet|Eth|Vlanif|Eth-Trunk)\s*([\d/\.]+)\b",
+    re.IGNORECASE
+)
 
+IFACE_PREFIX_EXPANSION = {"ge": "GigabitEthernet", "fe": "FastEthernet", "eth": "Ethernet"}
+
+
+def normalize_iface_name(prefix: str, numbers: str) -> str:
+    key = prefix.lower().replace("-", "")
+    full_prefix = IFACE_PREFIX_EXPANSION.get(key, prefix)
+    return f"{full_prefix}{numbers}"
+
+
+def extract_expected_interfaces(rag_text: str) -> dict[str, set[str]]:
+    """Même logique de proximité que extract_vlans_per_device : associe
+    une interface citée dans le manuel au device mentionné juste avant.
+    Priorité à la co-occurrence sur la même ligne (ex: 'R1 (GE 0/0/0)')."""
+    device_ifaces: dict[str, set[str]] = {}
+    device_pattern = re.compile(r"\b((?:S|R|LSW|SW|GW)\d+(?:[-_][A-Z0-9]+)*)\b", re.IGNORECASE)
+    active_devices, lines_since_device, WINDOW_SIZE = set(), 999, 3   # réduit de 10 à 3
+
+    for line in rag_text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            lines_since_device += 1
+            continue
+
+        devices_on_line = {normalize_device_name(m.group(1)) for m in device_pattern.finditer(stripped)}
+        ifaces_on_line  = {normalize_iface_name(m.group(1), m.group(2)) for m in IFACE_PATTERN.finditer(stripped)}
+
+        # PRIORITÉ : device ET interface sur la MÊME ligne → association certaine
+        if devices_on_line and ifaces_on_line:
+            for dev in devices_on_line:
+                device_ifaces.setdefault(dev, set()).update(ifaces_on_line)
+            active_devices, lines_since_device = devices_on_line, 0
+            continue
+
+        if devices_on_line:
+            active_devices, lines_since_device = devices_on_line, 0
+        else:
+            lines_since_device += 1
+
+        if ifaces_on_line and active_devices and lines_since_device <= WINDOW_SIZE:
+            for dev in active_devices:
+                device_ifaces.setdefault(dev, set()).update(ifaces_on_line)
+
+    return device_ifaces
 
 # ---------------------------------------------------------------------------
 # 5. VÉRIFICATIONS AUTOMATIQUES
@@ -441,6 +605,22 @@ class AutoChecker:
     ) -> list[ValidationAlert]:
         """Vérifie CPU, interfaces down, OSPF instable."""
         alerts = []
+        full_rag = "\n".join(
+            r.content for r in
+            doc_result.rag_text_results + doc_result.rag_table_results + doc_result.rag_image_results
+        )
+
+        if doc_result.manual_reference_text_structured:
+            full_rag = doc_result.manual_reference_text_structured
+        elif doc_result.manual_reference_text:
+            full_rag += "\n" + doc_result.manual_reference_text
+        else:
+            full_rag = "\n".join(
+        r.content for r in
+        doc_result.rag_text_results + doc_result.rag_table_results + doc_result.rag_image_results
+    )
+        expected_active = extract_expected_interfaces(full_rag)
+        has_reference = bool(full_rag.strip())
         for device_name, data in doc_result.device_data.items():
             if not data.ospf_peers and "ospf" in doc_result.rag_context.lower():
                 alerts.append(ValidationAlert(
@@ -466,29 +646,51 @@ class AutoChecker:
                 and "LoopBack" not in i.get("name", "")
             ]
             if down:
-                alerts.append(ValidationAlert(
+                expected = expected_active.get(device_name, set())
+
+                if not expected and has_reference:
+                # Filet de sécurité : si l'extraction n'a rien trouvé pour ce
+                # device alors qu'on a du texte de référence, on ne veut pas
+                # masquer un vrai problème → on garde l'ancien comportement.
+                    alerts.append(ValidationAlert(
                     severity=AlertSeverity.CRITICAL,
                     category="anomaly",
-                    message=f"Interface(s) DOWN sur {device_name}",
+                    message=f"Interface(s) DOWN sur {device_name} (aucune référence détectée — vérifier par précaution)",
                     device=device_name,
                     detail=f"Interfaces : {', '.join(down[:5])}",
                 ))
+                else:
+                    critical_down = [i for i in down if i in expected]
+                    unused_down   = [i for i in down if i not in expected]
 
-            bad_peers = [
-                p for p in data.ospf_peers
-                if "full" not in p.get("state", "").lower()
-            ]
+                    if critical_down:
+                        alerts.append(ValidationAlert(
+                        severity=AlertSeverity.CRITICAL,
+                        category="anomaly",
+                        message=f"Interface(s) DOWN sur {device_name} (documentées comme actives)",
+                        device=device_name,
+                        detail=f"Interfaces : {', '.join(critical_down)}",
+                    ))
+                    if unused_down:
+                        alerts.append(ValidationAlert(
+                        severity=AlertSeverity.INFO,
+                        category="info",
+                        message=f"{len(unused_down)} interface(s) DOWN sur {device_name} — non documentées, probablement inutilisées",
+                        device=device_name,
+                        detail=f"Interfaces : {', '.join(unused_down[:5])}",
+                    ))
+
+            bad_peers = [p for p in data.ospf_peers if "full" not in p.get("state", "").lower()]
             if bad_peers:
                 alerts.append(ValidationAlert(
-                    severity=AlertSeverity.CRITICAL,
-                    category="anomaly",
-                    message=f"OSPF instable sur {device_name}",
-                    device=device_name,
-                    detail=f"Voisins non-FULL : {[p.get('router_id') for p in bad_peers]}",
-                ))
+                severity=AlertSeverity.CRITICAL,
+                category="anomaly",
+                message=f"OSPF instable sur {device_name}",
+                device=device_name,
+                detail=f"Voisins non-FULL : {[p.get('router_id') for p in bad_peers]}",
+            ))
 
         return alerts
-
     def check_discrepancies(
         self,
         doc_result: DocumentalistResult,
@@ -517,9 +719,15 @@ class AutoChecker:
             doc_result.rag_table_results +
             doc_result.rag_image_results
         )
-        if doc_result.manual_reference_text:
+        if doc_result.manual_reference_text_structured:
+            full_rag = doc_result.manual_reference_text_structured
+        elif doc_result.manual_reference_text:
             full_rag += "\n" + doc_result.manual_reference_text
-
+        else:
+            full_rag = "\n".join(
+        r.content for r in
+        doc_result.rag_text_results + doc_result.rag_table_results + doc_result.rag_image_results
+    )
         # ── 1. VLANs par équipement ─────────────────────────────────────
         rag_vlans_per_device = extract_vlans_per_device(full_rag)
 
@@ -626,6 +834,24 @@ class AutoChecker:
                             f"{device_name} : Interface {iface} est DOWN "
                             f"alors que le manuel la mentionne comme active."
                         )
+        # ── 4. Routes statiques attendues ─────────────────────────────
+        expected_routes = extract_expected_static_routes(full_rag)
+        print(f"\n[Validator] Routes statiques attendues (RAG) : {expected_routes}")
+
+        for device_name, routes in expected_routes.items():
+            data = doc_result.device_data.get(device_name)
+            if not data:
+                continue
+            routing_table_text = data.raw_outputs.get("display ip routing-table", "")
+            for route in routes:
+                if route["network"] not in routing_table_text:
+                    discrepancies.append(
+                        f"{device_name} : Route statique {route['network']}/{route['mask']} "
+                        f"vers {route['next_hop']} requise par le manuel mais ABSENTE.\n"
+                        f"   Commande corrective : "
+                        f"[{device_name}] ip route-static {route['network']} "
+                        f"{route['mask']} {route['next_hop']}"
+                    )
 
         return discrepancies
 
@@ -650,7 +876,115 @@ class AutoChecker:
                   ConfidenceLevel.MEDIUM if score >= 0.45 else
                   ConfidenceLevel.LOW)
         return score, level
+    def check_protocol_status(
+    self,
+    doc_result: DocumentalistResult,
+) -> list[str]:
+        """
+    Produit des CONSTATS FACTUELS (positifs ou négatifs) sur les protocoles
+    explicitement mentionnés dans la question, à partir des données terrain.
+    """
+        print(f"[DEBUG] mentioned_protos reçus par Validator : {doc_result.mentioned_protos}")
+        facts = []
+        protos = {p.upper() for p in doc_result.mentioned_protos}
+        if not protos:
+            return facts
 
+    # Regex de détection du bloc de config par protocole (config active)
+        CONFIG_MARKERS = {
+        "OSPF":  r"^ospf\s+(\d+)",
+        "BGP":   r"^bgp\s+(\d+)",
+        "VRRP":  r"vrrp\s+vrid\s+(\d+)",
+        "STP":   r"stp\s+(?:enable|mode)",
+        "RSTP":  r"stp\s+mode\s+rstp",
+        "MSTP":  r"stp\s+mode\s+mstp",
+        "LLDP":  r"lldp\s+enable",
+        "RIP":   r"^rip\s+(\d+)",
+        "DHCP":  r"dhcp\s+enable",
+        "ACL":   r"^acl\s+(?:number\s+)?(\d+)",
+        "VRRP":  r"vrrp\s+vrid",
+    }
+
+        for device_name, data in doc_result.device_data.items():
+            config_text = data.raw_outputs.get("display current-configuration", "")
+
+            for proto in protos:
+
+                if proto == "OSPF":
+                    m = re.search(r"^ospf\s+(\d+)", config_text, re.IGNORECASE | re.MULTILINE)
+                    if m:
+                        detail = self._peer_summary(data.ospf_peers, "état")
+                        facts.append(f"{device_name} : OSPF est configuré (processus {m.group(1)}) — {detail}.")
+                    else:
+                        facts.append(f"{device_name} : OSPF n'est PAS configuré.")
+
+                elif proto == "BGP":
+                    m = re.search(r"^bgp\s+(\d+)", config_text, re.IGNORECASE | re.MULTILINE)
+                    if m:
+                        detail = self._peer_summary(data.bgp_peers, "état", ok_state="established")
+                        facts.append(f"{device_name} : BGP est configuré (AS {m.group(1)}) — {detail}.")
+                    else:
+                        facts.append(f"{device_name} : BGP n'est PAS configuré.")
+
+                elif proto == "VRRP":
+                    if data.vrrp_groups:
+                        resume = ", ".join(
+                        f"groupe {g['vrid']} sur {g['interface']} en état {g['state']}"
+                        for g in data.vrrp_groups
+                    )
+                        facts.append(f"{device_name} : VRRP est configuré — {resume}.")
+                    elif re.search(r"vrrp\s+vrid", config_text, re.IGNORECASE):
+                        facts.append(f"{device_name} : VRRP est configuré mais aucun groupe actif détecté (vérifier la collecte).")
+                    else:
+                        facts.append(f"{device_name} : VRRP n'est PAS configuré.")
+
+                elif proto in ("STP", "RSTP", "MSTP"):
+                    if data.stp_ports:
+                        forwarding = [p for p in data.stp_ports if p["state"] == "FORWARDING"]
+                        facts.append(
+                        f"{device_name} : {proto} est actif — {len(data.stp_ports)} port(s) suivi(s), "
+                        f"{len(forwarding)} en FORWARDING."
+                    )
+                    else:
+                        facts.append(f"{device_name} : Aucune donnée {proto} disponible (commande non collectée ou protocole inactif).")
+
+                elif proto == "LLDP":
+                    if data.lldp_neighbors:
+                        facts.append(
+                        f"{device_name} : LLDP est actif — {len(data.lldp_neighbors)} voisin(s) découvert(s) "
+                        f"({', '.join(n['neighbor_device'] for n in data.lldp_neighbors[:3])})."
+                    )
+                    else:
+                        facts.append(f"{device_name} : Aucun voisin LLDP détecté (protocole possiblement désactivé).")
+
+                elif proto in CONFIG_MARKERS:
+                # Fallback générique : présence/absence dans la config, sans détail de voisinage
+                    pattern = CONFIG_MARKERS[proto]
+                    if re.search(pattern, config_text, re.IGNORECASE | re.MULTILINE):
+                        facts.append(f"{device_name} : {proto} apparaît configuré dans la configuration active (vérification détaillée non automatisée).")
+                    else:
+                        facts.append(f"{device_name} : {proto} n'apparaît PAS dans la configuration active.")
+
+                else:
+                # Protocole mentionné mais totalement non instrumenté (ex: MPLS, QOS, NAT...)
+                    facts.append(
+                    f"{device_name} : constat automatique non disponible pour {proto} — "
+                    f"consultez la configuration brute ou le manuel pour ce protocole."
+                )
+
+        return facts
+
+
+    def _peer_summary(self, peers: list[dict], key_field: str, ok_state: str = "full") -> str:
+        """Résume un état de voisinage (OSPF/BGP) — factorisé pour éviter la duplication."""
+        if not peers:
+            return "aucun voisin détecté actuellement"
+        ok    = [p for p in peers if ok_state in p.get("state", "").lower()]
+        not_ok = [p for p in peers if ok_state not in p.get("state", "").lower()]
+        detail = f"{len(ok)} voisin(s) en état {ok_state.upper()}"
+        if not_ok:
+            detail += f", {len(not_ok)} voisin(s) hors {ok_state.upper()}"
+        return detail
 
 # ---------------------------------------------------------------------------
 # 6. AGENT VALIDATEUR
@@ -669,11 +1003,11 @@ class ValidatorAgent:
     def __init__(self, api_key: Optional[str] = None):
         resolved_key = api_key or os.getenv("GROQ_API_KEY")
         if resolved_key:
-            self._client  = Groq(api_key=resolved_key)
+            self._llm = LLMFallbackClient(groq_api_key=resolved_key)  # adapte le nom de variable si différent
             self._use_llm = True
             print(f"[ValidatorAgent] LLM actif — {GROQ_MODEL}")
         else:
-            self._client  = None
+            self._llm     = None
             self._use_llm = False
             print("[ValidatorAgent] Mode sans LLM")
 
@@ -688,6 +1022,9 @@ class ValidatorAgent:
         self,
         query:      str,
         doc_result: DocumentalistResult,
+        intent:     str = "",
+        strategy:   str = "",
+
     ) -> ValidatorResult:
         """Valide et finalise la réponse du Documentaliste."""
         print(f"\n[ValidatorAgent] Validation : '{query[:50]}'")
@@ -697,6 +1034,7 @@ class ValidatorAgent:
         rag_quality, rag_alerts = self._checker.check_rag_quality(doc_result)
         device_alerts           = self._checker.check_device_health(doc_result)
         discrepancies           = self._checker.check_discrepancies(doc_result)
+        protocol_facts          = self._checker.check_protocol_status(doc_result)   # ← AJOUT
         all_alerts              = rag_alerts + device_alerts
 
         print(f"    ✓ {len(all_alerts)} alerte(s) | "
@@ -715,16 +1053,28 @@ class ValidatorAgent:
 
         # Étape 3 : finalisation LLM
         print("  [3/3] Finalisation LLM...")
-        alerts_text       = "\n".join(a.to_text() for a in all_alerts)
-        discrepancies_text = "\n".join(f"⚠ {d}" for d in discrepancies)
+
+        # CORRECTION : on sépare les alertes actionnables (CRITICAL/WARNING)
+        # des alertes purement informatives (INFO). Le LLM ne doit jamais
+        # traiter une alerte INFO comme un problème à corriger — sans cette
+        # séparation, il mélangeait les deux et proposait des commandes
+        # correctives pour des observations neutres (ex: interfaces down
+        # non documentées, donc probablement inutilisées).
+        actionable_alerts = [a for a in all_alerts if a.severity != AlertSeverity.INFO]
+        info_alerts       = [a for a in all_alerts if a.severity == AlertSeverity.INFO]
+
+        actionable_alerts_text = "\n".join(a.to_text() for a in actionable_alerts)
+        info_alerts_text       = "\n".join(a.to_text() for a in info_alerts)
+        discrepancies_text     = "\n".join(f"⚠ {d}" for d in discrepancies)
+        protocol_facts_text    = "\n".join(f". {f}" for f in protocol_facts)   # ← AJOUT
 
         if self._use_llm and doc_result.full_context:
             final_answer = self._finalize_with_llm(
-                query, doc_result, alerts_text, discrepancies_text
+                query, doc_result, intent, strategy,protocol_facts_text, actionable_alerts_text, info_alerts_text, discrepancies_text
             )
         else:
             final_answer = self._finalize_without_llm(
-                query, doc_result, all_alerts, discrepancies
+                query, doc_result, all_alerts, discrepancies, protocol_facts
             )
 
         recommendations = self._build_recommendations(
@@ -755,49 +1105,56 @@ class ValidatorAgent:
         print(f"  Alertes      : {len(all_alerts)}")
         print(f"  Écarts       : {len(discrepancies)}")
         return result
-
+    
     def _finalize_with_llm(
         self,
-        query:             str,
-        doc_result:        DocumentalistResult,
-        alerts_text:       str,
-        discrepancies_text: str,
+        query:                  str,
+        doc_result:             DocumentalistResult,
+        intent:                 str,
+        strategy:               str,
+        protocol_facts_text:    str,
+        actionable_alerts_text: str,
+        info_alerts_text:       str,
+        discrepancies_text:     str,
     ) -> str:
         prompt = build_validator_prompt(
             original_query=query,
+            intent=intent,
+            strategy=strategy,
             preliminary_answer=doc_result.full_context,
             rag_context=doc_result.rag_context[:2000],
-            device_context=doc_result.device_context[:1500],
-            alerts_text=alerts_text,
+            device_context=doc_result.device_context[:4000],
+            actionable_alerts_text=actionable_alerts_text,
+            info_alerts_text=info_alerts_text,
             discrepancies_text=discrepancies_text,
+            protocol_facts_text=protocol_facts_text,
         )
         try:
-            response = self._client.chat.completions.create(
-                model=GROQ_MODEL,
-                temperature=TEMPERATURE,
-                max_tokens=MAX_TOKENS,
-                messages=[
-                    {"role": "system", "content": VALIDATOR_SYSTEM_PROMPT},
-                    {"role": "user",   "content": prompt},
-                ],
-            )
-            return response.choices[0].message.content.strip()
+            llm_response = self._llm.complete(
+        system_prompt=VALIDATOR_SYSTEM_PROMPT,
+        user_prompt=prompt,
+        temperature=TEMPERATURE,
+        max_tokens=MAX_TOKENS,
+    )
+            return llm_response.content.strip()
         except Exception as e:
             print(f"  ⚠ LLM échoué ({e})")
             return doc_result.full_context or "Erreur lors de la génération de la réponse."
-
     def _finalize_without_llm(
         self,
         query:        str,
         doc_result:   DocumentalistResult,
         alerts:       list[ValidationAlert],
         discrepancies: list[str],
+        protocol_facts=None,
     ) -> str:
         parts = [f"RÉPONSE À : {query}\n"]
         if doc_result.full_context:
             parts.append(doc_result.full_context)
         if alerts:
             parts += ["\nALERTES :"] + [a.to_text() for a in alerts]
+        if protocol_facts:
+            parts += ["\nCONSTATS D'ÉTAT :"] + [f"  . {f}" for f in protocol_facts]
         if discrepancies:
             parts += ["\nÉCARTS THÉORIE/TERRAIN :"] + [f"  ⚠ {d}" for d in discrepancies]
         return "\n".join(parts)
@@ -873,8 +1230,77 @@ def get_validator_agent(api_key: Optional[str] = None) -> ValidatorAgent:
 
 
 def validator_node(state: dict) -> dict:
+    print("###### VALIDATOR_NODE VERSION TEST 123 ######")
     query   = state.get("query", "")
+    intent   = state.get("intent", "")
+    strategy = state.get("strategy", "")
     api_key = state.get("api_key") or os.getenv("GROQ_API_KEY")
+
+    if intent == "design_update":
+        plan = state.get("plan", {}) or {}
+        device_name = plan.get("design_device_name", "nouvel équipement")
+        device_type = plan.get("design_device_type", "switch")
+        management_ip = plan.get("design_device_ip", "")
+        parent_device = plan.get("design_parent_device", "")
+        topology_yaml_block = plan.get("topology_yaml_block", "")
+        remediation_commands = plan.get("remediation_commands", []) or []
+        deployment_notes = plan.get("deployment_notes", []) or []
+
+        summary_lines = [
+            f"**Résumé**",
+            f"- Déploiement préparé pour {device_name} ({device_type}).",
+            f"- IP de management proposée : {management_ip}.",
+        ]
+        if parent_device:
+            summary_lines.append(f"- Équipement parent cible : {parent_device}.")
+
+        if topology_yaml_block:
+            summary_lines.extend([
+                "",
+                "**Bloc YAML**",
+                "```yaml",
+                topology_yaml_block,
+                "```",
+            ])
+
+        if remediation_commands:
+            summary_lines.extend([
+                "",
+                "**Commandes VRP**",
+                "```bash",
+                "\n".join(remediation_commands),
+                "```",
+            ])
+
+        if deployment_notes:
+            summary_lines.extend(["", "**Notes**"])
+            summary_lines.extend([f"- {note}" for note in deployment_notes])
+
+        result = ValidatorResult(
+            final_answer="\n".join(summary_lines),
+            confidence=ConfidenceLevel.HIGH,
+            confidence_score=0.96,
+            sources_used=[],
+            devices_consulted=[d for d in [parent_device, device_name] if d],
+            validation_checks={
+                "intent": intent,
+                "topology_update_ready": True,
+            },
+        )
+
+        return {
+            **state,
+            "final_answer": result.final_answer,
+            "confidence": result.confidence.value,
+            "confidence_score": result.confidence_score,
+            "alerts": [],
+            "discrepancies": [],
+            "recommendations": [],
+            "sources_used": result.sources_used,
+            "devices_consulted": result.devices_consulted,
+            "validation_checks": result.validation_checks,
+            "step": "validator_done",
+        }
 
     doc_result = DocumentalistResult()
     doc_result.full_context   = state.get("full_context", "")
@@ -882,16 +1308,27 @@ def validator_node(state: dict) -> dict:
     doc_result.device_context = state.get("device_context", "")
     doc_result.total_rag_chunks = state.get("rag_chunks_count", 0)
     doc_result.manual_reference_text = state.get("manual_reference_text", "")
+    doc_result.manual_reference_text_structured = state.get("manual_reference_text_structured", "")
     # Récupération des résultats RAG depuis l'état
     doc_result.rag_text_results  = state.get("rag_text_results", [])
     doc_result.rag_image_results = state.get("rag_image_results", [])
     doc_result.rag_table_results = state.get("rag_table_results", [])
-
+    doc_result.mentioned_protos  = state.get("mentioned_protos", [])   # ← AJOUT
+    doc_result.mentioned_vlans   = state.get("mentioned_vlans", [])    # ← AJOUT
+    doc_result.mentioned_devices = state.get("mentioned_devices", []) # ← AJOUT
     # Récupération des données terrain
     doc_result.device_data = state.get("device_data", {})
-
+    print("\n[DEBUG DEVICE DATA]")
+    for name, data in doc_result.device_data.items():
+        print(
+        name,
+        "type=",
+        type(data),
+        "stp_ports=",
+        getattr(data, "stp_ports", "ABSENT")
+    )
     agent  = get_validator_agent(api_key)
-    result = agent.validate(query=query, doc_result=doc_result)
+    result = agent.validate(query=query, doc_result=doc_result, intent=intent, strategy=strategy)
 
     return {
         **state,

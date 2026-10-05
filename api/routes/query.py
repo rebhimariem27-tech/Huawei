@@ -18,8 +18,8 @@ DÉPENDANCES :
 from __future__ import annotations
 
 import json
-
-from fastapi import APIRouter, Depends, HTTPException, Path
+from pathlib import Path  
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from dependencies import get_pipeline

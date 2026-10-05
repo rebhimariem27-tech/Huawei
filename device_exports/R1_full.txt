@@ -1,0 +1,23 @@
+# Export R1 (192.168.56.10)
+# Copiez-collez le terminal eNSP ici
+
+[R1]display version
+--- résultat ---
+
+[R1]display current-configuration
+--- résultat ---
+
+[R1]display ip routing-table
+--- résultat ---
+
+[R1]display interface brief
+--- résultat ---
+
+[R1]display ospf peer
+--- résultat ---
+
+[R1]display ip interface brief
+--- résultat ---
+
+[R1]display cpu-usage
+--- résultat ---

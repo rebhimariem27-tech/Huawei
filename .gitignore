@@ -1,0 +1,38 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+npm-debug.log*
+
+# Local databases, vector stores and generated runtime data
+**/qdrant_storage/
+qdrant_storage/
+logs/
+uploads/
+state/
+*.log
+
+# Generated ingestion artifacts
+backend/extracted_images/
+backend/ingestion/extracted_images/
+backend/ingestion/*_chunks.json
+backend/ingestion/chunks_output.json
+
+# Editor and OS files
+.vscode/*.log
+.DS_Store
+Thumbs.db

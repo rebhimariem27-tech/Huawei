@@ -261,7 +261,7 @@ class QdrantWrapper:
     # ------------------------------------------------------------------
     # OPÉRATIONS CRUD SUR LES POINTS
     # ------------------------------------------------------------------
-
+    
     def get_by_id(self, chunk_id: str) -> Optional[dict]:
         """
         Récupère un point par son UUID.
@@ -324,11 +324,19 @@ class QdrantWrapper:
         limit:       int = 100,
     ) -> list[dict]:
         """
-        Récupère tous les chunks d'un PDF source.
+        Récupère tous les chunks d'un PDF source, ORDONNÉS pour préserver
+    la structure logique du document.
 
-        Utilisé pour vérifier ce qui a été indexé depuis un fichier
-        ou pour afficher le contenu d'un document spécifique.
-        """
+    CRITIQUE : client.scroll() ne garantit AUCUN ordre — il retourne les
+    points dans l'ordre de stockage interne de Qdrant, qui peut différer
+    de l'ordre du document. Sans tri, l'association device↔VLAN/interface
+    (qui dépend de la proximité textuelle entre un nom d'équipement et
+    l'info qui le suit dans le PDF) peut associer un VLAN/une interface
+    au mauvais device si les chunks sont recollés dans le désordre.
+
+    Tri par (page_number, chunk_index, bbox_y0) : chunk_index restaure
+    l'ordre de découpage à l'ingestion, bbox_y0 départage les chunks
+    d'un même bloc par position verticale sur la page (haut → bas)."""
         try:
             results, _ = self._client.scroll(
                 collection_name=self.config.collection_name,
@@ -342,7 +350,21 @@ class QdrantWrapper:
                 with_payload=True,
                 with_vectors=False,
             )
-            return [r.payload for r in results]
+            payloads = [r.payload for r in results]
+
+            # Tri : priorité à chunk_index/position si présent à l'ingestion,
+            # sinon fallback sur page_number (au moins l'ordre des pages est
+            # correct, même si l'ordre intra-page peut rester approximatif)
+            def sort_key(p: dict):
+                return (
+                p.get("page_number", 0),
+                
+                p.get("chunk_index", p.get("position", 0)),
+                p.get("bbox_y0", 0.0),
+            )
+
+            payloads.sort(key=sort_key)
+            return payloads
         except Exception as e:
             print(f"[QdrantWrapper] get_by_source error : {e}")
             return []
@@ -450,6 +472,9 @@ class QdrantWrapper:
         """Compte les chunks par type — version allégée de get_stats()."""
         stats = self.get_stats()
         return stats.get("by_type", {})
+    def get_collections(self):
+        """Passthrough vers le client natif — pour compat avec du code appelant get_collections() sur le wrapper."""
+        return self._client.get_collections()
 
 
 # ---------------------------------------------------------------------------

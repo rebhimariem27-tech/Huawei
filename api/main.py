@@ -16,6 +16,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 ROOT_DIR = Path(__file__).parent.parent
 AGENTS_DIR = ROOT_DIR / "agents"
@@ -26,6 +27,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from dependencies import INGESTION_AVAILABLE, get_pipeline, get_qdrant  # noqa: E402
 from schemas import HealthResponse  # noqa: E402
 from routes import api_router  # noqa: E402
+from routes.devices import start_device_monitor, stop_device_monitor  # noqa: E402
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -48,14 +50,22 @@ app.add_middleware(
 
 app.include_router(api_router)
 
-
+REPORTS_DIR = ROOT_DIR / "reports"
+REPORTS_DIR.mkdir(exist_ok=True)
+app.mount("/reports", StaticFiles(directory=str(REPORTS_DIR)), name="reports")
 @app.on_event("startup")
 def on_startup() -> None:
     print("[API] Démarrage — initialisation du pipeline LangGraph...")
     get_pipeline()
+    start_device_monitor()
     print("[API] Pipeline prêt ✓")
     if not INGESTION_AVAILABLE:
         print("[API] ⚠ Module d'ingestion introuvable — POST /ingest sera indisponible")
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    stop_device_monitor()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -75,12 +85,14 @@ def health() -> HealthResponse:
     groq_ok = bool(os.getenv("GROQ_API_KEY"))
 
     devices_reachable = devices_total = None
+    device_connectivity = None
     try:
         from mcp_tools import MCPTools
         mcp = MCPTools()
         connectivity = mcp.check_connectivity()
         devices_total = len(connectivity)
         devices_reachable = sum(1 for reachable in connectivity.values() if reachable)
+        device_connectivity = connectivity
     except Exception as e:
         print(f"[Health] MCPTools indisponible : {e}")
 
@@ -93,6 +105,7 @@ def health() -> HealthResponse:
         ingestion_available=INGESTION_AVAILABLE,
         devices_reachable=devices_reachable,
         devices_total=devices_total,
+        device_connectivity=device_connectivity,
         timestamp=datetime.now().isoformat(),
     )
 

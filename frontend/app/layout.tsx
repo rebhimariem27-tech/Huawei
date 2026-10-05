@@ -1,7 +1,8 @@
-// frontend/app/layout.tsx
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "./theme-provider";
+
 
 // Mono = vocabulaire terminal VRP (bannière, statuts, données device).
 const plexMono = IBM_Plex_Mono({
@@ -25,16 +26,27 @@ export const metadata: Metadata = {
     "Assistant RAG multimodal pour la documentation et l'infrastructure réseau Huawei.",
 };
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f0f0f" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
       <body className={`${plexMono.variable} ${plexSans.variable}`}>
-        {children}
+        <ThemeProvider>
+          <div className="signal-bar" aria-hidden="true" />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
+
 }

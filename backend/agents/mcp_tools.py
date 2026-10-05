@@ -37,7 +37,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
-
+# Pattern strict du prompt VRP Huawei : <R1> ou [R1] en fin de ligne
+# (le \s*$ empêche de matcher un '>' ou ']' isolé au milieu d'une sortie)
+VRP_PROMPT_PATTERN = r"[\[<][\w\-\.]+[\]>]\s*$"
 
 # ---------------------------------------------------------------------------
 # 1. TYPES
@@ -76,6 +78,7 @@ SWITCH_COMMANDS = [
     "display interface brief",
     "display ip routing-table",
     "display cpu-usage",
+    "display memory-usage",
     "display stp brief",
 ]
 
@@ -87,7 +90,19 @@ ROUTER_COMMANDS = [
     "display ospf peer",
     "display ip interface brief",
     "display cpu-usage",
+    "display memory-usage",
 ]
+# Commandes optionnelles, ajoutées seulement si le protocole est mentionné
+# dans la question (évite d'alourdir CHAQUE collecte avec des commandes inutiles)
+PROTOCOL_COMMANDS: dict[str, str] = {
+    "OSPF": "display ospf peer",   # ← AJOUT
+    "BGP":  "display bgp peer",
+    "VRRP": "display vrrp",
+    "STP":  "display stp brief",
+    "RSTP": "display stp brief",
+    "MSTP": "display stp brief",
+    "LLDP": "display lldp neighbor brief",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +128,7 @@ class TopologyLoader:
             protocol: telnet     # R1 utilise Telnet
             port: 23
     """
-
+    
     def __init__(self, yaml_path: str = "topology.yaml"):
         self.yaml_path = Path(yaml_path)
 
@@ -208,7 +223,12 @@ class DeviceData:
     vlans:        list[dict]      = field(default_factory=list)
     routes:       list[dict]      = field(default_factory=list)
     ospf_peers:   list[dict]      = field(default_factory=list)
+    bgp_peers:    list[dict]      = field(default_factory=list)   # ← AJOUT
+    vrrp_groups:   list[dict] = field(default_factory=list)   # ← AJOUT
+    stp_ports:     list[dict] = field(default_factory=list)   # ← AJOUT
+    lldp_neighbors: list[dict] = field(default_factory=list)  # ← AJOUT
     cpu_usage:    Optional[float] = None
+    memory_usage: Optional[float] = None
     errors:       list[str]       = field(default_factory=list)
     is_complete:  bool            = True
 
@@ -238,16 +258,26 @@ class DeviceData:
             icon = "⚠" if self.cpu_usage > 70 else "✓"
             lines.append(f"CPU      : {self.cpu_usage:.1f}% {icon}")
 
+        if self.memory_usage is not None:
+            icon = "⚠" if self.memory_usage > 80 else "✓"
+            lines.append(f"Mémoire  : {self.memory_usage:.1f}% {icon}")
+
         if self.interfaces:
             lines.append(f"\n--- Interfaces ({len(self.interfaces)}) ---")
-            for iface in self.interfaces[:8]:
+    # Priorité aux interfaces UP, puis DOWN, pour ne jamais masquer un lien actif
+            sorted_ifaces = sorted(
+                self.interfaces,
+        key=lambda i: 0 if "up" in i.get("phy_state", "").lower() else 1
+    )
+            for iface in sorted_ifaces[:15]:   # limite plus généreuse
                 state = iface.get("state", "?")
                 icon  = "✓" if "up" in state.lower() else "✗"
                 lines.append(
-                    f"  {icon} {iface.get('name','?'):22s} "
-                    f"{iface.get('ip',''):16s} {state}"
-                )
-
+            f"  {icon} {iface.get('name','?'):22s} "
+            f"{iface.get('ip',''):16s} {state}"
+        )
+            if len(self.interfaces) > 15:
+                lines.append(f"  ... et {len(self.interfaces) - 15} autre(s) interface(s), voir raw_outputs")
         if self.vlans:
             lines.append(f"\n--- VLANs ({len(self.vlans)}) ---")
             for v in self.vlans[:6]:
@@ -273,6 +303,17 @@ class DeviceData:
                     f"  {icon} {p.get('router_id','?'):15s} "
                     f"via {p.get('interface','?'):15s} {state}"
                 )
+        if self.stp_ports:
+            lines.append(f"\n--- STP ({len(self.stp_ports)} ports) ---")
+            for p in self.stp_ports[:10]:
+                icon = "✓" if p.get("state") == "FORWARDING" else "⚠"
+                lines.append(
+                    f"  {icon} {p.get('port','?'):25s} "
+                    f"Role={p.get('role','?'):6s} "
+                    f"State={p.get('state','?')} "
+                    f"Protection={p.get('protection','?')}"
+                )
+
 
         if self.errors:
             lines.append(f"\n⚠ {len(self.errors)} erreur(s) de collecte")
@@ -291,7 +332,12 @@ class DeviceData:
             "vlans":        self.vlans,
             "routes":       self.routes,
             "ospf_peers":   self.ospf_peers,
+            "stp_ports": self.stp_ports,
+            "bgp_peers": self.bgp_peers,
+            "vrrp_groups": self.vrrp_groups,
+            "lldp_neighbors": self.lldp_neighbors,
             "cpu_usage":    self.cpu_usage,
+            "memory_usage": self.memory_usage,
             "errors":       self.errors,
             "is_complete":  self.is_complete,
         }
@@ -318,7 +364,7 @@ class RemoteCollector:
         "global_delay_factor": 2,  # marge supplémentaire, utile pour Telnet/eNSP
     }
 
-    def collect(self, device: DeviceInfo) -> dict[str, str]:
+    def collect(self, device: DeviceInfo, extra_commands: list[str] = None) -> dict[str, str]:
         try:
             from netmiko import ConnectHandler
         except ImportError:
@@ -328,19 +374,33 @@ class RemoteCollector:
         netmiko_device_type = "huawei_telnet" if is_telnet else "huawei"
 
         params = {
-            **self.BASE_CONFIG,
-            "device_type": netmiko_device_type,
-            "host":        device.mgmt_ip,
-            "username":    device.username,
-            "password":    device.password,
-            "port":        device.ssh_port,
-            "timeout":     device.ssh_timeout,
-        }
+        **self.BASE_CONFIG,
+        "device_type": netmiko_device_type,
+        "host":        device.mgmt_ip,
+        "username":    device.username,
+        "password":    device.password,
+        "port":        device.ssh_port,
+        "timeout":     device.ssh_timeout,
+    }
+        if is_telnet:
+            params["global_delay_factor"] = 4
+        base_commands = (
+        SWITCH_COMMANDS if device.device_type == DeviceType.SWITCH
+        else ROUTER_COMMANDS
+    )
+        commands = list(dict.fromkeys(base_commands + (extra_commands or [])))
 
-        commands = (
-            SWITCH_COMMANDS if device.device_type == DeviceType.SWITCH
-            else ROUTER_COMMANDS
-        )
+    # ── CORRECTIF : déplacer les commandes volumineuses en toute fin ──
+    # display cpu-usage (et potentiellement d'autres commandes verbeuses)
+    # peuvent laisser un résidu dans le buffer Telnet/SSH si la lecture
+    # se termine avant que tout le flux ne soit reçu. Si une telle commande
+    # n'est pas la DERNIÈRE de la liste, la commande suivante hérite de ce
+    # résidu au lieu de sa propre réponse (ex: STP recevait le CPU usage).
+        HEAVY_COMMANDS = ["display cpu-usage"]
+        for heavy in HEAVY_COMMANDS:
+            if heavy in commands:
+                commands.remove(heavy)
+                commands.append(heavy)
 
         outputs = {}
         conn    = None
@@ -350,32 +410,44 @@ class RemoteCollector:
             print(f"    [{proto_label}] Connexion {device.name} ({device.mgmt_ip}:{device.ssh_port})...")
             conn = ConnectHandler(**params)
 
-            # Désactiver pagination VRP
             conn.send_command(
-                "screen-length 0 temporary",
-                expect_string=r"[>\]]",
-            )
-
+            "screen-length 0 temporary",
+            expect_string=VRP_PROMPT_PATTERN,
+        )
+            previous_cmd = None
             for cmd in commands:
                 try:
                     print(f"    [{proto_label}] {cmd}...", end=" ", flush=True)
-                    out = conn.send_command(
-                        cmd,
-                        expect_string=r"[>\]]",
-                        read_timeout=20,
+                    try:
+                        leftover = conn.read_channel()
+                        if leftover.strip():
+                            print(f"\n    [{proto_label}] ⚠ Résidu détecté avant '{cmd}' "
+                                  f"({len(leftover)} car.) — rattaché à '{previous_cmd}'"
+                            )
+                            if previous_cmd is not None and previous_cmd in outputs:
+                                outputs[previous_cmd] = (
+                        outputs[previous_cmd].rstrip() + "\n" + leftover.strip()
                     )
+                    except Exception:
+                        pass
+                    out = conn.send_command(
+            cmd,
+            expect_string=VRP_PROMPT_PATTERN,
+            read_timeout=20,
+        )
                     outputs[cmd] = out.strip()
                     print(f"✓ ({len(out.splitlines())} lignes)")
                     time.sleep(0.3)
                 except Exception as e:
                     outputs[cmd] = f"[ERREUR] {e}"
                     print(f"✗")
+                    previous_cmd = cmd
 
         except Exception as e:
             raise ConnectionError(
-                f"{proto_label} échoué vers {device.name} ({device.mgmt_ip}) : {e}\n"
-                f"Vérifiez que eNSP tourne et que {proto_label} est configuré."
-            )
+            f"{proto_label} échoué vers {device.name} ({device.mgmt_ip}) : {e}\n"
+            f"Vérifiez que eNSP tourne et que {proto_label} est configuré."
+        )
         finally:
             if conn:
                 try:
@@ -417,6 +489,7 @@ class FileCollector:
             "display ospf peer":             f"{name}_ospf.txt",
             "display version":               f"{name}_version.txt",
             "display cpu-usage":             f"{name}_cpu.txt",
+            "display memory-usage":          f"{name}_memory.txt",
         }
         for cmd, fname in file_map.items():
             fpath = self.exports_dir / fname
@@ -541,27 +614,199 @@ class VRPParser:
         return routes
 
     def parse_ospf_peers(self, output: str) -> list[dict]:
-        peers   = []
-        pattern = re.compile(
+        peers = []
+        iface_pattern = re.compile(
+        r"interface\s+[\d\.]+\(([\w/\.\-]+)\)'s neighbors",
+        re.IGNORECASE
+    )
+        rid_pattern = re.compile(
+        r"Router ID:\s*([\d\.]+)\s+Address:\s*([\d\.]+)",
+        re.IGNORECASE
+    )
+        state_pattern = re.compile(r"State:\s*([\w\-]+)", re.IGNORECASE)
+
+        current_iface = ""
+        current_peer  = None
+
+        for line in output.splitlines():
+            iface_m = iface_pattern.search(line)
+            if iface_m:
+                current_iface = iface_m.group(1)
+                continue
+
+            rid_m = rid_pattern.search(line)
+            if rid_m:
+                if current_peer:
+                    peers.append(current_peer)
+                current_peer = {
+                "router_id": rid_m.group(1),
+                "address":   rid_m.group(2),
+                "interface": current_iface,
+                "state":     "",
+            }
+                continue
+
+            state_m = state_pattern.search(line)
+            if state_m and current_peer is not None:
+                current_peer["state"] = state_m.group(1)
+
+        if current_peer:
+            peers.append(current_peer)
+
+    # Fallback : ancien format tabulaire "display ospf peer brief"
+        if not peers:
+            pattern = re.compile(
             r"([\d\.]+)\s+\d+\s+(Full|Init|2-Way|ExStart|Exchange|Loading|Down)[/\w]*"
             r"\s+\d+\s+([\d\.]+)\s+([\w/\.\-]+)",
             re.IGNORECASE
         )
-        for m in pattern.finditer(output):
-            peers.append({
+            for m in pattern.finditer(output):
+                peers.append({
                 "router_id": m.group(1),
                 "state":     m.group(2),
                 "address":   m.group(3),
                 "interface": m.group(4),
             })
-        return peers
 
+        return peers
+    def parse_bgp_peers(self, output: str) -> list[dict]:
+        """Parse 'display bgp peer'. Format VRP typique :
+    Peer            V AS  MsgRcvd MsgSent OutQ Up/Down State PfxRcd
+    192.168.1.2     4 65002  10   10       0  00:05:23 Established  3
+    """
+        peers = []
+        pattern = re.compile(
+        r"^([\d\.]+)\s+\d+\s+(\d+)\s+\d+\s+\d+\s+\d+\s+"
+        r"([\w:]+)\s+(\w+)\s*(\d*)",
+        re.MULTILINE
+    )
+        for m in pattern.finditer(output):
+            peers.append({
+            "peer_ip": m.group(1),
+            "as":      m.group(2),
+            "up_down": m.group(3),
+            "state":   m.group(4),
+            "prefixes": m.group(5) or "0",
+        })
+        return peers
+    def parse_vrrp(self, output: str) -> list[dict]:
+        """Parse 'display vrrp'. Format VRP typique :
+    Vlanif99 | Virtual Router 1
+     State : Master
+     Virtual IP : 192.168.56.99
+     Master IP : 192.168.56.11
+     Priority : 120
+    """
+        groups = []
+    # Découpe par bloc "Virtual Router"
+        blocks = re.split(r"(?=\S+\s*\|\s*Virtual Router)", output)
+        for block in blocks:
+            iface_m = re.search(r"^(\S+)\s*\|\s*Virtual Router\s*(\d+)", block)
+            if not iface_m:
+                continue
+            state_m    = re.search(r"State\s*:\s*(\w+)", block, re.IGNORECASE)
+            vip_m      = re.search(r"Virtual IP\s*:\s*([\d\.]+)", block, re.IGNORECASE)
+            priority_m = re.search(r"Priority\s*:\s*(\d+)", block, re.IGNORECASE)
+            groups.append({
+            "interface": iface_m.group(1),
+            "vrid":      iface_m.group(2),
+            "state":     state_m.group(1) if state_m else "unknown",
+            "virtual_ip": vip_m.group(1) if vip_m else "",
+            "priority":  priority_m.group(1) if priority_m else "",
+        })
+        return groups
+    def parse_stp_brief(self, output: str) -> list[dict]:
+        """
+    Parse display stp brief Huawei VRP.
+
+    Exemples supportés:
+
+    0 GE0/0/1 DESI FORWARDING NONE
+    0 GigabitEthernet0/0/1 ROOT FORWARDING NONE
+    """
+
+        ports = []
+
+        for line in output.splitlines():
+
+            line = line.strip()
+
+        # Ignore headers
+            if (
+            not line
+            or line.startswith("MSTID")
+            or line.startswith("-")
+            or "Port" in line and "Role" in line
+        ):
+                continue
+
+
+            m = re.match(
+            r"^(\d+)\s+"
+            r"(\S+)\s+"
+            r"(\S+)\s+"
+            r"(FORWARDING|DISCARDING|LEARNING|DISCARD)\s*"
+            r"(\S+)?",
+            line,
+            re.IGNORECASE
+        )
+
+            if not m:
+                continue
+
+
+            ports.append(
+            {
+                "mstid": m.group(1),
+                "port": m.group(2),
+                "role": m.group(3),
+                "state": m.group(4).upper(),
+                "protection": (
+                    m.group(5)
+                    if m.group(5)
+                    else "NONE"
+                )
+            }
+        )
+
+        return ports
+    
+    def parse_lldp_neighbors(self, output: str) -> list[dict]:
+        """Parse 'display lldp neighbor brief'. Format VRP typique :
+    Local Intf     Neighbor Dev       Neighbor Intf     Exptime
+    GE0/0/1        S1                 GE0/0/1           98s
+    """
+        neighbors = []
+        pattern = re.compile(
+        r"^(\S+)\s+(\S+)\s+(\S+)\s+(\d+s)",
+        re.MULTILINE
+    )
+        for m in pattern.finditer(output):
+            neighbors.append({
+            "local_interface":    m.group(1),
+            "neighbor_device":    m.group(2),
+            "neighbor_interface": m.group(3),
+            "expire":             m.group(4),
+        })
+        return neighbors
     def parse_cpu_usage(self, output: str) -> Optional[float]:
         m = re.search(r"CPU Usage\s*:\s*([\d\.]+)%", output, re.IGNORECASE)
         if m:
             return float(m.group(1))
         m = re.search(r"(\d+)%", output)
         return float(m.group(1)) if m else None
+
+    def parse_memory_usage(self, output: str) -> Optional[float]:
+        patterns = [
+            r"Memory\s*(?:Using\s*Rate|Usage(?:\s*Rate)?|utilization)?\s*(?:is|:)?\s*([\d\.]+)%",
+            r"memory\s*(?:using\s*rate|usage|utilization)?\s*(?:is|:)?\s*([\d\.]+)%",
+            r"([\d\.]+)%\s*(?:of)?\s*memory",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, output, re.IGNORECASE)
+            if match:
+                return float(match.group(1))
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -616,6 +861,8 @@ class MCPTools:
         self,
         device_name: str,
         mode:        AccessMode = None,
+        extra_commands: list[str] = None,   # ← AJOUT
+
     ) -> DeviceData:
         """
         Collecte et parse toutes les données d'un équipement.
@@ -646,10 +893,10 @@ class MCPTools:
         actual_mode = mode.value
 
         print(f"\n[MCPTools] Collecte {name} ({device.mgmt_ip}) "
-              f"[protocole configuré: {device.protocol}] [mode: {mode.value}]")
-
+          f"[protocole configuré: {device.protocol}] [mode: {mode.value}]"
+          + (f" [+ {extra_commands}]" if extra_commands else ""))
         if mode == AccessMode.SSH:  # "SSH" = live, quel que soit le protocole réel
-            raw_outputs = self._remote_collector.collect(device)
+            raw_outputs = self._remote_collector.collect(device , extra_commands=extra_commands)
             actual_mode = device.protocol
 
         elif mode == AccessMode.FILE:
@@ -659,7 +906,7 @@ class MCPTools:
         elif mode == AccessMode.AUTO:
             if self._is_reachable(device.mgmt_ip, device.ssh_port):
                 try:
-                    raw_outputs = self._remote_collector.collect(device)
+                    raw_outputs = self._remote_collector.collect(device, extra_commands=extra_commands)
                     actual_mode = device.protocol
                     print(f"  → {device.protocol.upper()} réussi ✓")
                 except Exception as e:
@@ -672,7 +919,151 @@ class MCPTools:
                 actual_mode = "file"
 
         return self._build_device_data(device, raw_outputs, actual_mode)
+    def push_command(self, device_name: str, commands: str | list[str]) -> dict:
+        """
+    Envoie une ou plusieurs commandes de configuration en mode config VRP,
+    dans UNE SEULE session SSH/Telnet.
 
+    IMPORTANT : pour des commandes imbriquées (ex: "ospf 1" → "area 0.0.0.0"
+    → "network ..."), il faut impérativement les passer ensemble dans une
+    liste, car chaque commande dépend du contexte laissé par la précédente
+    (vue OSPF, vue Area, etc.). Envoyer une session par commande réinitialise
+    le contexte à chaque fois et fait échouer silencieusement les commandes
+    imbriquées (Netmiko ne lève pas d'erreur, il retourne juste une sortie
+    invalide que le VRP interprète comme "pas de zone/réseau ajouté").
+
+    Args:
+        device_name: nom de l'équipement (ex: "S3")
+        commands: une commande unique (str) ou une séquence ordonnée (list[str])
+
+    Returns:
+        {"success": bool, "output": str}
+    """
+        name = device_name.upper()
+        if name not in self._registry:
+            return {"success": False, "output": f"Équipement '{name}' introuvable"}
+
+        device = self._registry[name]
+        # Normalisation : accepte str (rétro-compat) ou list[str]
+        command_list = [commands] if isinstance(commands, str) else list(commands)
+        if not command_list:
+            return {"success": False, "output": "Aucune commande fournie"}
+
+        try:
+            from netmiko import ConnectHandler
+        except ImportError:
+            return {"success": False, "output": "netmiko manquant (pip install netmiko)"}
+
+        is_telnet = device.protocol == "telnet"
+        netmiko_device_type = "huawei_telnet" if is_telnet else "huawei"
+
+        params = {
+        **RemoteCollector.BASE_CONFIG,
+        "device_type": netmiko_device_type,
+        "host":        device.mgmt_ip,
+        "username":    device.username,
+        "password":    device.password,
+        "port":        device.ssh_port,
+        "timeout":     device.ssh_timeout,
+    }
+
+        conn = None
+        proto_label = "TELNET" if is_telnet else "SSH"
+        try:
+            print(f"    [{proto_label}] Remédiation {device.name} → {command_list}")
+            conn = ConnectHandler(**params)
+        # UNE seule session pour toute la séquence — préserve le contexte
+        # entre commandes imbriquées (ospf 1 → area → network ...).
+            output = conn.send_config_set(command_list)
+
+            try:
+                conn.save_config()
+            except Exception:
+            # Certains pilotes VRP/eNSP ne supportent pas save_config() proprement —
+            # la commande reste appliquée en mémoire courante malgré tout.
+                pass
+
+            print(f"    [{proto_label}] ✓ séquence appliquée ({len(command_list)} commande(s))")
+            return {"success": True, "output": output}
+
+        except Exception as e:
+            print(f"    [{proto_label}] ✗ {e}")
+            return {"success": False, "output": str(e)}
+        finally:
+            if conn:
+                try:
+                    conn.disconnect()
+                except Exception:
+                    pass
+    def run_terminal_session(self, device_name: str, commands: list[str]) -> dict:
+        """
+    Ouvre UNE session SSH/Telnet et exécute une séquence de commandes en
+    mode exec (send_command, pas send_config_set) — adapté pour des
+    commandes de lecture comme "display current-configuration", mais
+    fonctionne aussi si tu navigues entre vues ("system-view", "quit", ...)
+    puisque VRP_PROMPT_PATTERN matche à la fois <S1> et [S1].
+
+    Returns:
+        {
+            "success": bool,
+            "results": [{"command": str, "output": str}, ...],
+            "error": str | None,
+        }
+    """
+        name = device_name.upper()
+        if name not in self._registry:
+            return {"success": False, "results": [], "error": f"Équipement '{name}' introuvable"}
+
+        device = self._registry[name]
+        if not commands:
+            return {"success": False, "results": [], "error": "Aucune commande fournie"}
+
+        try:
+            from netmiko import ConnectHandler
+        except ImportError:
+            return {"success": False, "results": [], "error": "netmiko manquant (pip install netmiko)"}
+
+        is_telnet = device.protocol == "telnet"
+        netmiko_device_type = "huawei_telnet" if is_telnet else "huawei"
+
+        params = {
+        **RemoteCollector.BASE_CONFIG,
+        "device_type": netmiko_device_type,
+        "host":        device.mgmt_ip,
+        "username":    device.username,
+        "password":    device.password,
+        "port":        device.ssh_port,
+        "timeout":     device.ssh_timeout,
+    }
+
+        conn = None
+        proto_label = "TELNET" if is_telnet else "SSH"
+        results = []
+
+        try:
+            print(f"    [{proto_label}] Terminal {device.name} → {commands}")
+            conn = ConnectHandler(**params)
+            conn.send_command("screen-length 0 temporary", expect_string=VRP_PROMPT_PATTERN)
+
+            for cmd in commands:
+                try:
+                    out = conn.send_command(cmd, expect_string=VRP_PROMPT_PATTERN, read_timeout=20)
+                    results.append({"command": cmd, "output": out.strip()})
+                except Exception as e:
+                    results.append({"command": cmd, "output": f"[ERREUR] {e}"})
+
+            print(f"    [{proto_label}] ✓ {len(results)} commande(s) exécutée(s)")
+            return {"success": True, "results": results, "error": None}
+
+        except Exception as e:
+            print(f"    [{proto_label}] ✗ {e}")
+            return {"success": False, "results": results, "error": str(e)}
+        finally:
+            if conn:
+                try:
+                    conn.disconnect()
+                except Exception:
+                    pass
     def get_all_devices(
         self,
         mode:    AccessMode = None,
@@ -817,7 +1208,13 @@ class MCPTools:
             vlans        =safe(self._parser.parse_vlans,           raw_outputs.get("display vlan", ""),                  default=[]),
             routes       =safe(self._parser.parse_routing_table,   raw_outputs.get("display ip routing-table", ""),      default=[]),
             ospf_peers   =safe(self._parser.parse_ospf_peers,      raw_outputs.get("display ospf peer", ""),             default=[]),
+            bgp_peers    =safe(self._parser.parse_bgp_peers,       raw_outputs.get("display bgp peer", ""),              default=[]),
+            vrrp_groups    =safe(self._parser.parse_vrrp,           raw_outputs.get("display vrrp", ""),                  default=[]),
+            stp_ports      =safe(self._parser.parse_stp_brief,      raw_outputs.get("display stp brief", ""),             default=[]),
+            lldp_neighbors =safe(self._parser.parse_lldp_neighbors, raw_outputs.get("display lldp neighbor brief", ""),   default=[]),
+   
             cpu_usage    =safe(self._parser.parse_cpu_usage,       raw_outputs.get("display cpu-usage", ""),             default=None),
+            memory_usage =safe(self._parser.parse_memory_usage,    raw_outputs.get("display memory-usage", ""),          default=None),
             errors=errors,
             is_complete=len(raw_outputs) > 0,
         )

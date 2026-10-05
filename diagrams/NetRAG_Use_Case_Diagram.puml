@@ -1,0 +1,51 @@
+@startuml NetRAG_Use_Case_Diagram
+
+' Use-case view for Chapter 3, subsection 3.4.4.
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName "Arial"
+skinparam defaultFontSize 12
+skinparam ArrowColor #4B5563
+skinparam ActorBorderColor #1F2937
+skinparam ActorFontColor #111827
+skinparam UsecaseBorderColor #1F2937
+skinparam UsecaseBackgroundColor #F8FAFC
+skinparam UsecaseFontColor #111827
+skinparam RectangleBorderColor #1D4ED8
+skinparam RectangleFontColor #1E3A8A
+skinparam RectangleBackgroundColor #EFF6FF
+skinparam linetype ortho
+
+actor "Network Engineer" as engineer
+
+rectangle "NetRAG" as netrag {
+  usecase "Query Technical\nDocumentation" as UC_Documentation
+  usecase "Check Network\nStatus" as UC_Status
+  usecase "Perform Compliance\nAudit" as UC_Audit
+  usecase "Inspect Devices" as UC_Devices
+  usecase "Manage Network\nTopology" as UC_Topology
+  usecase "Generate Remediation\nCommands" as UC_Remediation
+  usecase "Consult Reports" as UC_Reports
+
+  ' Stable positioning keeps the A4 rendering compact and readable.
+  UC_Documentation -[hidden]down- UC_Status
+  UC_Status -[hidden]down- UC_Audit
+  UC_Audit -[hidden]down- UC_Devices
+  UC_Devices -[hidden]down- UC_Topology
+  UC_Topology -[hidden]down- UC_Remediation
+  UC_Remediation -[hidden]down- UC_Reports
+}
+
+engineer -- UC_Documentation
+engineer -- UC_Status
+engineer -- UC_Audit
+engineer -- UC_Devices
+engineer -- UC_Topology
+engineer -- UC_Remediation
+engineer -- UC_Reports
+
+UC_Audit ..> UC_Documentation : <<include>>
+UC_Audit ..> UC_Status : <<include>>
+
+@enduml

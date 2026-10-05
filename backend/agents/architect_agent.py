@@ -24,7 +24,38 @@ RÔLE DANS LE PIPELINE :
 RESPONSABILITÉS :
     1. COMPRENDRE l'intention (configuration, diagnostic, audit...)
     2. PLANIFIER la stratégie de recherche (RAG seul, terrain, hybride)
-    3. EXTRAIRE les entités (équipements, VLANs, protocoles)
+    3. EXTRACTION DES ENTITÉS (RÈGLE STRICTE) :
+
+IMPORTANT :
+Tu dois extraire uniquement les entités explicitement présentes dans la question utilisateur.
+
+INTERDICTIONS :
+- Ne jamais ajouter un équipement simplement parce qu'il existe dans la topologie.
+- Ne jamais déduire un VLAN depuis une interface.
+- Ne jamais compléter avec des équipements probables.
+
+Équipements :
+- Extraire uniquement les noms cités explicitement (ex: S1, R1).
+
+VLAN :
+- Extraire uniquement si un numéro VLAN apparaît explicitement.
+- Exemples valides :
+  VLAN10
+  VLAN 20
+
+- Ne jamais considérer :
+  Vlanif1
+  Vlanif10
+  interface VLAN
+  SVI
+
+comme un VLAN.
+
+Protocoles :
+- Extraire uniquement les protocoles écrits dans la question.
+
+Interfaces :
+- Extraire uniquement les interfaces écrites dans la question.
     4. ENRICHIR la query pour maximiser la pertinence Qdrant
 """
 
@@ -35,20 +66,21 @@ import json
 import re
 import sys
 from dataclasses import dataclass, field
+import ipaddress
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from backend.llm.fallback_client import LLMFallbackClient
 
 from groq import Groq
 sys.path.insert(0, str(Path(__file__).parent.parent))  # backend/
 from logging_config import get_logger
-
+from dotenv import load_dotenv
+load_dotenv()
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # 1. TYPES DE DONNÉES
 # ---------------------------------------------------------------------------
-
 class QueryIntent(str, Enum):
     CONFIGURATION = "configuration"   # "Comment configurer X ?"
     DIAGNOSTIC    = "diagnostic"      # "Pourquoi X ne fonctionne pas ?"
@@ -57,6 +89,7 @@ class QueryIntent(str, Enum):
     OPTIMIZATION  = "optimization"    # "Optimise cette architecture"
     STATUS_CHECK  = "status_check"    # "Quel est l'état de X ?"
     COMPARISON    = "comparison"      # "Compare X et Y"
+    DESIGN_UPDATE = "design_update"   # "Ajoute un switch / déploie une topologie"
     HEALTH_REPORT = "health_report"
     UNKNOWN       = "unknown"
 
@@ -91,6 +124,15 @@ class ArchitectPlan:
     sub_queries:       list[str]      = field(default_factory=list)
     complexity:        str            = "medium"
     estimated_sources: int            = 3
+    design_device_name: str           = ""
+    design_device_type: str           = ""
+    design_device_ip:   str           = ""
+    design_parent_device: str         = ""
+    design_parent_interface: str      = ""
+    design_link_mode:    str          = ""
+    topology_yaml_block: str          = ""
+    remediation_commands: list[str]   = field(default_factory=list)
+    deployment_notes:    list[str]    = field(default_factory=list)
 
     def to_prompt_context(self) -> str:
         lines = [
@@ -109,6 +151,14 @@ class ArchitectPlan:
             lines.append(f"  VLANs       : {self.mentioned_vlans}")
         if self.sub_queries:
             lines.append(f"  Sub-queries : {self.sub_queries}")
+        if self.intent == QueryIntent.DESIGN_UPDATE:
+            lines.append(f"  Nouveau nœud : {self.design_device_name} ({self.design_device_type})")
+            lines.append(f"  IP mgmt      : {self.design_device_ip}")
+            lines.append(f"  Parent       : {self.design_parent_device or 'N/A'}")
+            if self.design_parent_interface:
+                lines.append(f"  Interface    : {self.design_parent_interface}")
+            if self.design_link_mode:
+                lines.append(f"  Lien         : {self.design_link_mode}")
         return "\n".join(lines)
 
     def to_dict(self) -> dict:
@@ -129,6 +179,15 @@ class ArchitectPlan:
             "mentioned_protos":  self.mentioned_protos,
             "complexity":        self.complexity,
             "estimated_sources": self.estimated_sources,
+            "design_device_name": self.design_device_name,
+            "design_device_type": self.design_device_type,
+            "design_device_ip": self.design_device_ip,
+            "design_parent_device": self.design_parent_device,
+            "design_parent_interface": self.design_parent_interface,
+            "design_link_mode": self.design_link_mode,
+            "topology_yaml_block": self.topology_yaml_block,
+            "remediation_commands": self.remediation_commands,
+            "deployment_notes": self.deployment_notes,
         }
 
 
@@ -137,8 +196,8 @@ class ArchitectPlan:
 # ---------------------------------------------------------------------------
 
 # CORRECTION : modèle disponible sur Groq (vérifié juillet 2026)
-GROQ_MODEL  = "meta-llama/llama-4-scout-17b-16e-instruct"
-MAX_TOKENS  = 1024
+GROQ_MODEL="openai/gpt-oss-120b"
+MAX_TOKENS  = 1536
 TEMPERATURE = 0.1
 
 # Entités Huawei reconnues pour l'extraction par règles
@@ -242,18 +301,42 @@ BASE DE CONNAISSANCES QDRANT :
 
 RÈGLES D'ANALYSE :
 1. INTENTION : identifie parmi [configuration, diagnostic, audit, explanation, \
-optimization, status_check, comparison, health_report, unknown] 
+optimization, status_check, comparison, design_update, health_report, unknown] 
    - Utilise 'health_report' si l'utilisateur demande une prédiction, une analyse de santé, un rapport de panne ou l'état de fatigue du matériel.
+   - Utilise 'status_check' pour toute question sur l'état RÉEL actuel d'un équipement
+     ou d'un protocole (ex: "est-ce que OSPF est configuré sur R1 ?", "quel est l'état
+     des interfaces de S1 ?"). Ce type de question attend une réponse FACTUELLE sur le
+     terrain, pas une comparaison avec le manuel.
+   - Utilise 'audit' ou 'comparison' uniquement si la question demande explicitement
+     une vérification de conformité vs le manuel (ex: "est-ce conforme au manuel ?",
+     "quels sont les écarts ?").
 2. ENTITÉS : extrais les équipements, VLANs (ex: VLAN3), protocoles, interfaces
 3. STRATÉGIE :
    - "rag_only"    → question théorique sur les manuels uniquement
    - "device_only" → état actuel d'un équipement (pas besoin des manuels)
    - "hybrid"      → combine manuels Qdrant + état équipement (cas fréquent)
    - "comparison"  → compare explicitement théorie vs terrain
-4. ENRICHISSEMENT : reformule enriched_query pour maximiser la pertinence Qdrant
+4. CHUNK_TYPES : choisis parmi [text, code_cli, image_desc, table, heading].
+   - RÈGLE IMPORTANTE : si un protocole précis est mentionné (OSPF, BGP, VRRP, STP,
+     VLAN...), inclut TOUJOURS "text" en plus de "code_cli"/"table" — les exigences
+     de ce protocole sont souvent décrites en prose dans le manuel, jamais uniquement
+     dans des commandes CLI. Ne restreins jamais à ["code_cli", "table"] seuls quand
+     un protocole est mentionné.
+5. SUB_QUERIES : si un protocole est mentionné dans la question, génère au moins :
+   - une sub-query ciblant l'état terrain (ex: "Huawei display ospf peer",
+     "Huawei OSPF neighbor state")
+   - une sub-query ciblant la configuration attendue dans le manuel (ex: "Huawei OSPF
+     area configuration standard")
+6. NEEDS_LIVE_DATA : mets toujours true si la question porte sur l'état actuel d'un
+   équipement ou d'un protocole (status_check, diagnostic, health_report, ou toute
+   mention explicite de protocole).
+7. ENRICHISSEMENT : reformule enriched_query pour maximiser la pertinence Qdrant
+8. DESIGN_UPDATE : si l'utilisateur demande d'ajouter/déployer un équipement ou une
+    extension de topologie, remplis aussi design_device_name, design_device_type,
+    design_device_ip, design_parent_device, topology_yaml_block,
+    remediation_commands et deployment_notes.
 
 RÉPONDS UNIQUEMENT EN JSON valide, sans markdown ni commentaires."""
-
 
 def build_architect_prompt(query: str) -> str:
     """Construit le prompt utilisateur avec le format JSON attendu."""
@@ -276,7 +359,16 @@ Analyse et retourne ce JSON exactement :
   "enriched_query": "string",
   "sub_queries": ["string", ...],
   "complexity": "low|medium|high",
-  "estimated_sources": integer
+    "estimated_sources": integer,
+    "design_device_name": "string",
+    "design_device_type": "switch|router",
+    "design_device_ip": "string",
+    "design_parent_device": "string",
+            "design_parent_interface": "string",
+            "design_link_mode": "string",
+    "topology_yaml_block": "string",
+    "remediation_commands": ["string", ...],
+    "deployment_notes": ["string", ...]
 }}"""
 
 
@@ -302,7 +394,7 @@ class ArchitectAgent:
 
     def __init__(
         self,
-        api_key:       Optional[str] = None,
+        api_key:       str | None = None,
         topology_file: str           = "topology.yaml",
     ):
         # Chargement dynamique de la topologie
@@ -311,11 +403,12 @@ class ArchitectAgent:
         # Client Groq
         resolved_key = api_key or os.getenv("GROQ_API_KEY")
         if resolved_key:
-            self._client  = Groq(api_key=resolved_key)
+            
+            self._llm = LLMFallbackClient(groq_api_key=resolved_key)
             self._use_llm = True
             print(f"[ArchitectAgent] LLM actif — {GROQ_MODEL}")
         else:
-            self._client  = None
+            self._llm     = None
             self._use_llm = False
             print("[ArchitectAgent] Mode règles (GROQ_API_KEY manquant)")
 
@@ -357,6 +450,9 @@ class ArchitectAgent:
             plan = self._analyze_with_rules(query)
             print(f"  → [RÈGLES] Intent : {plan.intent.value}")
 
+        if plan.intent == QueryIntent.DESIGN_UPDATE:
+            plan = self._build_design_update_plan(query, plan)
+
         return plan
 
     # ------------------------------------------------------------------
@@ -376,18 +472,15 @@ class ArchitectAgent:
             topology_context=self._topology_text
         )
 
-        response = self._client.chat.completions.create(
-            model=GROQ_MODEL,
-            temperature=TEMPERATURE,
-            max_tokens=MAX_TOKENS,
-            messages=[
-                {"role": "system", "content": system_content},
-                {"role": "user",   "content": build_architect_prompt(query)},
-            ],
-        )
+        llm_response = self._llm.complete(
+    system_prompt=system_content,
+    user_prompt=build_architect_prompt(query),
+    temperature=TEMPERATURE,
+    max_tokens=MAX_TOKENS,
+    json_mode=True,
+)
 
-        raw_text = response.choices[0].message.content.strip()
-
+        raw_text = llm_response.content.strip()
         # Nettoyage des balises markdown si le modèle en ajoute
         raw_text = re.sub(r"```(?:json)?\s*|\s*```", "", raw_text).strip()
 
@@ -414,32 +507,80 @@ class ArchitectAgent:
             strategy = SearchStrategy.HYBRID
         # Sécurité réseau : un status_check doit comparer avec les exigences
         if intent in (
-    QueryIntent.STATUS_CHECK,
     QueryIntent.DIAGNOSTIC,
-    QueryIntent.AUDIT,
-):
+    QueryIntent.OPTIMIZATION,
+    QueryIntent.HEALTH_REPORT,
+
+):  
             strategy = SearchStrategy.HYBRID
 
         # Validation des devices (seulement ceux de la topologie)
-        raw_devices    = data.get("target_devices", [])
-        target_devices = [
-            d.upper() for d in raw_devices
-            if d.upper() in self._device_names
-        ] if self._device_names else [d.upper() for d in raw_devices]
+        raw_devices = data.get("target_devices", [])
 
+        target_devices = [
+    d.upper()
+    for d in raw_devices
+    if d.upper() in self._device_names
+] if self._device_names else [
+    d.upper()
+    for d in raw_devices
+]
+        # Validation des devices mentionnés par le LLM
+        raw_mentioned_devices = data.get("mentioned_devices", [])
+
+        mentioned_devices = [
+    d.upper()
+    for d in raw_mentioned_devices
+    if (
+        d.upper() in self._device_names
+        and re.search(
+            rf"\b{re.escape(d)}\b",
+            query,
+            re.IGNORECASE
+        )
+    )
+]
+        # Suppression des doublons
+        mentioned_devices = list(dict.fromkeys(mentioned_devices))
+        if mentioned_devices:
+            raw_mentioned_devices = mentioned_devices
+        else:
+            raw_mentioned_devices = []
         # Chunk types par défaut selon l'intention
         chunk_types = data.get("chunk_types") or self._default_chunk_types(intent)
 
         # Query enrichie
-        enriched = data.get("enriched_query", "").strip() or self._enrich_query(query)
+        enriched = data.get("enriched_query", "").strip()
 
+        # Suppression des équipements inventés par le LLM
+        for device in self._device_names:
+
+            if not re.search(
+        rf"\b{device}\b",
+        query,
+        re.IGNORECASE
+    ):
+                enriched = re.sub(
+            rf"\b{device}\b",
+            "",
+            enriched,
+            flags=re.IGNORECASE
+        )
+
+        enriched = re.sub(
+    r"\s+",
+    " ",
+    enriched
+).strip()
+        if not enriched:
+            enriched = self._enrich_query(query)
         return ArchitectPlan(
             original_query=query,
             intent=intent,
             intent_confidence=float(data.get("intent_confidence", 0.8)),
             intent_reasoning=data.get("intent_reasoning", ""),
-            mentioned_devices=data.get("mentioned_devices", []),
-            mentioned_vlans=data.get("mentioned_vlans", []),
+            mentioned_devices=mentioned_devices,
+            mentioned_vlans=self._validate_vlans(data.get("mentioned_vlans", [])),
             mentioned_protos=data.get("mentioned_protocols", []),
             mentioned_ifaces=data.get("mentioned_interfaces", []),
             strategy=strategy,
@@ -490,8 +631,10 @@ class ArchitectAgent:
 
         needs_live = intent in (
             QueryIntent.DIAGNOSTIC,
+            QueryIntent.OPTIMIZATION,
+            QueryIntent.HEALTH_REPORT,
             QueryIntent.STATUS_CHECK,
-            QueryIntent.AUDIT,
+
         )
 
         return ArchitectPlan(
@@ -509,7 +652,7 @@ class ArchitectAgent:
             needs_live_data=needs_live,
             needs_images="image_desc" in chunk_types,
             enriched_query=self._enrich_query(query),
-            sub_queries=self._build_sub_queries(query, intent, protos, devices),
+            sub_queries=self._build_sub_queries(query, intent, protos, devices, vlans, ifaces),
             complexity=self._estimate_complexity(query),
             estimated_sources=5 if needs_live else 3,
         )
@@ -520,12 +663,12 @@ class ArchitectAgent:
 
     def _detect_intent(self, q: str) -> QueryIntent:
         rules = [
-            (QueryIntent.HEALTH_REPORT, ["rapport", "santé", "prédiction", "prédire", "obsolescence", "health"]),
+            (QueryIntent.DESIGN_UPDATE, ["ajoute", "ajouter", "déployer", "deploy", "mettre en place", "nouveau switch", "nouveau routeur", "topology.yaml", "assistant de déploiement", "design update"]),
+            (QueryIntent.HEALTH_REPORT, ["rapport", "santé", "prédiction", "prédire","fatigue",
+                "vieillissement", "obsolescence", "health"]),
             (QueryIntent.DIAGNOSTIC,    ["pourquoi", "erreur", "problème", "down",
                                           "fail", "cannot", "not working", "issue",
-                                          "ne marche pas", "ne fonctionne pas"]),
-            (QueryIntent.CONFIGURATION, ["configurer", "configure", "how to",
-                                          "comment", "setup", "créer", "mettre en place"]),
+                                          "ne marche pas", "ne fonctionne pas","panne"]),
             (QueryIntent.AUDIT,         ["audit", "comparer", "compare", "conformit",
                                           "vérif", "check", "verify", "conforme"]),
             (QueryIntent.STATUS_CHECK,  ["état", "status", "running", "actif",
@@ -534,6 +677,9 @@ class ArchitectAgent:
                                           "performance", "bottleneck", "goulot"]),
             (QueryIntent.EXPLANATION,   ["expliquer", "explain", "qu'est-ce",
                                           "what is", "comment fonctionne", "c'est quoi"]),
+            (QueryIntent.CONFIGURATION, ["configurer", "configure", "how to",
+                                          "comment", "setup", "créer", "mettre en place"]),
+            
             (QueryIntent.COMPARISON,    ["différence", "vs", "versus",
                                           "compare", "quelle est la diff"]),
             ]
@@ -554,7 +700,34 @@ class ArchitectAgent:
             for m in re.finditer(r"\b([SR]\d+)\b", query, re.IGNORECASE):
                 found.append(m.group(1).upper())
         return list(dict.fromkeys(found))  # déduplique en préservant l'ordre
+    def _validate_vlans(self, vlans: list[str]) -> list[str]:
+        """
+    Garde uniquement les vrais VLAN.
+    Exemple accepté:
+        VLAN10
+        vlan 20
 
+    Refuse:
+        Vlanif1
+        Interface Vlanif
+    """
+
+        valid = []
+
+        for vlan in vlans:
+
+            match = re.search(
+            r"VLAN\s*(\d+)",
+            vlan,
+            re.IGNORECASE
+        )
+
+            if match:
+                valid.append(
+                f"VLAN{match.group(1)}"
+            )
+
+        return list(dict.fromkeys(valid))
     def _extract_vlans(self, query: str) -> list[str]:
         return [f"VLAN{m}" for m in re.findall(r"VLAN\s*(\d+)", query, re.IGNORECASE)]
 
@@ -567,17 +740,53 @@ class ArchitectAgent:
     def _extract_interfaces(self, query: str) -> list[str]:
         return [m.group(0) for m in HUAWEI_IFACE_PATTERN.finditer(query)]
 
-    def _decide_strategy(self, intent: QueryIntent, devices: list[str]) -> SearchStrategy:
-        if intent in (QueryIntent.DIAGNOSTIC, QueryIntent.STATUS_CHECK):
+    def _decide_strategy(
+    self,
+    intent: QueryIntent,
+    devices: list[str]
+) -> SearchStrategy:
+        if intent in (
+        QueryIntent.DIAGNOSTIC,
+        QueryIntent.OPTIMIZATION,
+        QueryIntent.HEALTH_REPORT,
+        QueryIntent.DESIGN_UPDATE,
+    ):
             return SearchStrategy.HYBRID
+
+
+        if intent == QueryIntent.STATUS_CHECK:
+
+            if devices:
+                return SearchStrategy.DEVICE_ONLY
+
+            return SearchStrategy.HYBRID
+
+
+        if intent == QueryIntent.CONFIGURATION:
+
+            if devices:
+                return SearchStrategy.HYBRID
+
+            return SearchStrategy.RAG_ONLY
+
+
         if intent == QueryIntent.AUDIT:
             return SearchStrategy.COMPARISON
+
+
         if intent == QueryIntent.EXPLANATION:
             return SearchStrategy.RAG_ONLY
-        if devices:
-            return SearchStrategy.HYBRID
-        return SearchStrategy.RAG_ONLY
 
+
+        if intent == QueryIntent.COMPARISON:
+
+            if devices:
+                return SearchStrategy.HYBRID
+
+            return SearchStrategy.RAG_ONLY
+
+
+        return SearchStrategy.RAG_ONLY
     def _default_chunk_types(self, intent: QueryIntent) -> list[str]:
         mapping = {
             QueryIntent.CONFIGURATION: ["code_cli", "text", "heading"],
@@ -585,8 +794,10 @@ class ArchitectAgent:
             QueryIntent.AUDIT:         ["code_cli", "text", "table", "image_desc"],
             QueryIntent.EXPLANATION:   ["text", "image_desc", "heading"],
             QueryIntent.OPTIMIZATION:  ["code_cli", "text", "image_desc"],
-            QueryIntent.STATUS_CHECK:  ["code_cli", "table"],
+            QueryIntent.HEALTH_REPORT: ["code_cli", "text", "table"],
+            QueryIntent.STATUS_CHECK:  ["code_cli", "table", "text"],
             QueryIntent.COMPARISON:    ["code_cli", "text", "image_desc", "table"],
+            QueryIntent.DESIGN_UPDATE: ["code_cli", "text", "table"],
             QueryIntent.UNKNOWN:       ["code_cli", "text"],
         }
         return mapping.get(intent, ["code_cli", "text"])
@@ -601,29 +812,513 @@ class ArchitectAgent:
         return " ".join(parts)
 
     def _build_sub_queries(
-        self,
-        query:   str,
-        intent:  QueryIntent,
-        protos:  list[str],
-        devices: list[str],
-    ) -> list[str]:
-        sub = []
-        for proto in protos[:2]:
-            sub.append(f"{proto} configuration Huawei VRP")
-        for dev in devices[:2]:
-            sub.append(f"{dev} troubleshooting {intent.value}")
-        if intent == QueryIntent.DIAGNOSTIC:
-            sub.append("Huawei interface troubleshooting down")
-        elif intent == QueryIntent.AUDIT:
-            sub.append("Huawei best practices configuration standards")
-        return sub[:4]
+    self,
+    query: str,
+    intent: QueryIntent,
+    protos: list[str],
+    devices: list[str],
+    vlans: list[str] = None,
+    ifaces: list[str] = None,
+) -> list[str]:
+        """
+    Génère des sous-requêtes optimisées pour le moteur RAG.
 
+    Priorité :
+    1. Protocole précis
+    2. VLAN / Interface
+    3. Contexte de panne
+    4. Bonnes pratiques selon intention
+
+    Retourne maximum 6 requêtes.
+    """
+
+        sub = []
+
+        vlans = vlans or []
+        ifaces = ifaces or []
+
+        q = query.lower()
+
+
+    # ==========================================================
+    # 1) REQUETES PAR PROTOCOLE
+    # ==========================================================
+
+        protocol_library = {
+
+            "OSPF": {
+            QueryIntent.STATUS_CHECK: [
+            "Huawei display ospf peer",
+            "Huawei OSPF process area configuration",
+            ],
+            QueryIntent.CONFIGURATION: [
+                "Huawei VRP OSPF configuration",
+                "Huawei OSPF area configuration",
+            ],
+
+            QueryIntent.DIAGNOSTIC: [
+                "Huawei OSPF troubleshooting",
+                "Huawei display ospf peer",
+                "Huawei OSPF neighbor state",
+            ],
+
+            QueryIntent.AUDIT: [
+                "Huawei OSPF best practices",
+                "Huawei OSPF configuration standards",
+            ],
+        },
+
+
+        "BGP": {
+            QueryIntent.STATUS_CHECK: [
+            "Huawei display bgp peer",
+            "Huawei BGP process configuration",
+        ],
+
+            QueryIntent.CONFIGURATION: [
+                "Huawei VRP BGP configuration",
+            ],
+
+            QueryIntent.DIAGNOSTIC: [
+                "Huawei BGP troubleshooting",
+                "Huawei display bgp peer",
+                "Huawei BGP neighbor state",
+            ],
+
+            QueryIntent.AUDIT: [
+                "Huawei BGP security best practices",
+            ],
+        },
+
+
+        "VRRP": {
+
+            QueryIntent.STATUS_CHECK: [
+            "Huawei display VRRP peer",
+            "Huawei VRRP process configuration",
+        ],
+
+            QueryIntent.CONFIGURATION: [
+                "Huawei VRP VRRP configuration",
+            ],
+
+            QueryIntent.DIAGNOSTIC: [
+                "Huawei VRRP troubleshooting",
+                "Huawei VRRP master backup state",
+            ],
+        },
+
+
+        "RSTP": {
+
+            QueryIntent.STATUS_CHECK: [
+            "Huawei display RSTP peer",
+            "Huawei RSTP process configuration",
+        ],
+
+            QueryIntent.DIAGNOSTIC: [
+                "Huawei RSTP troubleshooting",
+                "Huawei spanning tree topology issue",
+            ],
+
+            QueryIntent.CONFIGURATION: [
+                "Huawei RSTP configuration",
+            ],
+        },
+
+    }
+
+
+        for proto in protos:
+
+            proto = proto.upper()
+
+            if proto in protocol_library:
+
+                queries = protocol_library[proto].get(intent, [])
+
+                sub.extend(queries)
+
+
+
+    # ==========================================================
+    # 2) REQUETES VLAN
+    # ==========================================================
+
+        if vlans:
+
+            for vlan in vlans:
+
+                if intent == QueryIntent.CONFIGURATION:
+
+                    sub.append(
+                    f"Huawei {vlan} configuration"
+                )
+
+
+                elif intent == QueryIntent.DIAGNOSTIC:
+
+                    sub.extend([
+                    "Huawei VLAN troubleshooting",
+                    "Huawei trunk VLAN configuration",
+                    "Huawei dot1q troubleshooting",
+                ])
+
+
+
+                elif intent == QueryIntent.AUDIT:
+
+                    sub.extend([
+                    "Huawei VLAN best practices",
+                    "Huawei VLAN security standards",
+                ])
+
+
+
+
+    # ==========================================================
+    # 3) REQUETES INTERFACES
+    # ==========================================================
+
+        if ifaces:
+
+            if intent == QueryIntent.DIAGNOSTIC:
+
+                sub.extend([
+                "Huawei interface troubleshooting",
+                "Huawei display interface command",
+                "Huawei interface down troubleshooting",
+            ])
+
+
+            elif intent == QueryIntent.CONFIGURATION:
+
+                sub.extend([
+                "Huawei interface configuration",
+                "Huawei interface description configuration",
+            ])
+
+
+
+
+    # ==========================================================
+    # 4) CONTEXTE DETECTE DANS LA QUESTION
+    # ==========================================================
+
+
+        context_rules = {
+
+        "ping": [
+            "Huawei ping troubleshooting",
+            "Huawei ICMP connectivity troubleshooting",
+        ],
+
+
+        "route": [
+            "Huawei routing troubleshooting",
+            "Huawei display ip routing-table",
+        ],
+
+
+        "arp": [
+            "Huawei ARP troubleshooting",
+            "Huawei display arp",
+        ],
+
+
+        "dhcp": [
+            "Huawei DHCP troubleshooting",
+            "Huawei DHCP configuration",
+        ],
+
+
+        "mac": [
+            "Huawei MAC address table troubleshooting",
+            "Huawei display mac-address",
+        ],
+
+
+        "latence": [
+            "Huawei network performance troubleshooting",
+        ],
+
+
+        "perte": [
+            "Huawei packet loss troubleshooting",
+        ],
+
+    }
+
+
+
+        for keyword, queries in context_rules.items():
+
+            if keyword in q:
+                sub.extend(queries)
+
+
+
+
+    # ==========================================================
+    # 5) CAS GENERIQUES SELON INTENTION
+    # ==========================================================
+
+
+        if intent == QueryIntent.DIAGNOSTIC:
+
+            sub.append(
+            "Huawei VRP network troubleshooting methodology"
+        )
+
+
+        elif intent == QueryIntent.AUDIT:
+
+            sub.extend([
+            "Huawei configuration audit checklist",
+            "Huawei network best practices",
+        ])
+
+
+        elif intent == QueryIntent.OPTIMIZATION:
+
+            sub.extend([
+            "Huawei network performance optimization",
+            "Huawei configuration tuning best practices",
+        ])
+
+
+
+        elif intent == QueryIntent.EXPLANATION:
+
+            sub.append(
+            "Huawei VRP architecture explanation"
+        )
+
+        elif intent == QueryIntent.DESIGN_UPDATE:
+
+            sub.extend([
+            "Huawei switch trunk configuration",
+            "Huawei topology.yaml device definition",
+        ])
+
+
+
+    # ==========================================================
+    # 6) SI AUCUN ELEMENT TECHNIQUE TROUVE
+    # ==========================================================
+
+        if not sub:
+
+            sub.extend([
+            "Huawei VRP configuration guide",
+            "Huawei network troubleshooting guide",
+        ])
+
+
+
+
+    # ==========================================================
+    # 7) NETTOYAGE
+    # ==========================================================
+
+        cleaned = []
+
+        for item in sub:
+
+            item = item.strip()
+
+            if item and item not in cleaned:
+
+                cleaned.append(item)
+
+
+
+    # Maximum 6 requêtes pour éviter de saturer le RAG
+
+        return cleaned[:6]
     def _estimate_complexity(self, query: str) -> str:
         if len(query) < 50:
             return "low"
         if len(query) > 150:
             return "high"
         return "medium"
+
+    def _build_design_update_plan(self, query: str, base_plan: ArchitectPlan) -> ArchitectPlan:
+        topology = self._load_topology_data()
+        devices = topology.get("devices", []) if isinstance(topology, dict) else []
+        device_names = [str(dev.get("name", "")).upper() for dev in devices if dev.get("name")]
+
+        new_device_name = self._extract_new_device_name(query, device_names)
+        new_device_type = self._infer_device_type(query, new_device_name)
+        new_device_ip = self._next_free_mgmt_ip(topology)
+        parent_device = self._infer_parent_device(query, device_names, new_device_name)
+        parent_interface = self._infer_parent_interface(query)
+        link_mode = self._infer_link_mode(query)
+        topology_yaml_block = self._render_device_yaml(new_device_name, new_device_type, new_device_ip, parent_device, parent_interface, link_mode)
+        remediation_commands = self._build_remediation_commands(query, parent_interface, new_device_name, link_mode)
+
+        deployment_notes = [
+            f"Topologie prête pour l'ajout de {new_device_name}.",
+            f"IP de management réservée : {new_device_ip}",
+        ]
+        if parent_device:
+            deployment_notes.append(f"Switch parent cible : {parent_device}")
+
+        return ArchitectPlan(
+            original_query=query,
+            intent=QueryIntent.DESIGN_UPDATE,
+            intent_confidence=max(base_plan.intent_confidence, 0.92),
+            intent_reasoning=base_plan.intent_reasoning or "Déploiement réseau détecté par règles de design.",
+            mentioned_devices=base_plan.mentioned_devices,
+            mentioned_vlans=base_plan.mentioned_vlans,
+            mentioned_protos=base_plan.mentioned_protos,
+            mentioned_ifaces=base_plan.mentioned_ifaces,
+            strategy=SearchStrategy.RAG_ONLY,
+            target_devices=[parent_device] if parent_device else [],
+            chunk_types=["text", "code_cli", "table"],
+            needs_live_data=False,
+            needs_images=False,
+            enriched_query=f"Déployer {new_device_name} dans topology.yaml et générer la configuration trunk pour {parent_device or 'le switch parent'}",
+            sub_queries=[
+                "Huawei switch trunk configuration",
+                "Huawei topology.yaml device definition",
+            ],
+            complexity="medium",
+            estimated_sources=2,
+            design_device_name=new_device_name,
+            design_device_type=new_device_type,
+            design_device_ip=new_device_ip,
+            design_parent_device=parent_device,
+            design_parent_interface=parent_interface,
+            design_link_mode=link_mode,
+            topology_yaml_block=topology_yaml_block,
+            remediation_commands=remediation_commands,
+            deployment_notes=deployment_notes,
+        )
+
+    def _load_topology_data(self) -> dict:
+        candidates = [
+            Path("topology.yaml"),
+            Path(__file__).parent / "topology.yaml",
+            Path(__file__).parent.parent / "topology.yaml",
+        ]
+        yaml_file = next((p for p in candidates if p.exists()), None)
+        if yaml_file is None:
+            return {}
+        try:
+            import yaml
+            with open(yaml_file, encoding="utf-8") as handle:
+                return yaml.safe_load(handle) or {}
+        except Exception:
+            return {}
+
+    def _extract_new_device_name(self, query: str, existing_names: list[str]) -> str:
+        candidates = re.findall(r"\b([SR]\d+)\b", query, re.IGNORECASE)
+        for candidate in candidates:
+            normalized = candidate.upper()
+            if normalized not in existing_names:
+                return normalized
+        if candidates:
+            return candidates[-1].upper()
+        index = 1
+        while f"S{index}" in existing_names:
+            index += 1
+        return f"S{index}"
+
+    def _infer_device_type(self, query: str, device_name: str) -> str:
+        q = query.lower()
+        if any(word in q for word in ["routeur", "router", "l3", "layer 3"]):
+            return "router"
+        if any(word in q for word in ["switch", "commutateur", "topologie"]):
+            return "switch"
+        return "switch" if device_name.upper().startswith("S") else "router"
+
+    def _infer_parent_device(self, query: str, existing_names: list[str], new_device_name: str) -> str:
+        for name in existing_names:
+            if name.upper() == new_device_name.upper():
+                continue
+            if re.search(rf"\b{re.escape(name)}\b", query, re.IGNORECASE):
+                return name
+        for name in existing_names:
+            if name.upper().startswith("S"):
+                return name
+        return existing_names[0] if existing_names else ""
+
+    def _infer_parent_interface(self, query: str) -> str:
+        patterns = [
+            r"\b(?:ge|gigabitethernet)\s*(?:0/0/)?(\d+)\b",
+            r"\b(?:xge|10ge|fortygigabitethernet)\s*(?:0/0/)?(\d+)\b",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, query, re.IGNORECASE)
+            if match:
+                return f"GigabitEthernet0/0/{match.group(1)}"
+        return ""
+
+    def _infer_link_mode(self, query: str) -> str:
+        q = query.lower()
+        if "trunk" in q:
+            return "trunk"
+        if "access" in q:
+            return "access"
+        return "trunk" if any(word in q for word in ["uplink", "liaison", "branch", "connect", "branché"]) else "access"
+
+    def _next_free_mgmt_ip(self, topology: dict) -> str:
+        subnet = topology.get("management_subnet", "192.168.56.0/24")
+        network = ipaddress.ip_network(subnet, strict=False)
+        used_hosts: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+        for device in topology.get("devices", []) or []:
+            raw_ip = str(device.get("mgmt_ip", "")).strip()
+            if not raw_ip:
+                continue
+            try:
+                host = ipaddress.ip_address(raw_ip)
+            except ValueError:
+                continue
+            if host in network:
+                used_hosts.append(host)
+
+        if used_hosts:
+            next_host = int(max(used_hosts)) + 1
+            candidate = ipaddress.ip_address(next_host)
+            if candidate in network and candidate not in used_hosts:
+                return str(candidate)
+
+        for host in network.hosts():
+            host_ip = str(host)
+            if host_ip not in {str(item) for item in used_hosts}:
+                return host_ip
+        return str(next(network.hosts()))
+
+    def _render_device_yaml(self, name: str, device_type: str, ip: str, parent_device: str = "", parent_interface: str = "", link_mode: str = "") -> str:
+        lines = [
+            f"  - name: {name}",
+            f"    type: {device_type}",
+            f"    protocol: ssh",
+            f"    mgmt_ip: {ip}",
+        ]
+        if parent_device:
+            lines.append(f"    parent_device: {parent_device}")
+        if parent_interface:
+            lines.append(f"    parent_interface: {parent_interface}")
+        if link_mode:
+            lines.append(f"    link_mode: {link_mode}")
+        lines.append(f"    description: \"Nouveau {device_type} ajouté par l'assistant\"")
+        return "\n".join(lines)
+
+    def _build_remediation_commands(self, query: str, parent_interface: str, new_device_name: str, link_mode: str) -> list[str]:
+        interface_name = parent_interface or "GigabitEthernet 0/0/10"
+        port_mode = "trunk" if link_mode == "trunk" else "access"
+        commands = [
+            "system-view",
+            f"interface {interface_name}",
+            f" port link-type {port_mode}",
+            " port trunk allow-pass vlan all",
+            f" description Connecté vers {new_device_name}",
+        ]
+        if not any(word in query.lower() for word in ["trunk", "liaison", "uplink"]):
+            commands[2] = " port link-type access"
+        return commands
 
 
 # ---------------------------------------------------------------------------
@@ -632,10 +1327,10 @@ class ArchitectAgent:
 
 # CORRECTION : agent instancié UNE SEULE FOIS au niveau module
 # pas à chaque appel de architect_node (meilleure performance)
-_agent_instance: Optional[ArchitectAgent] = None
+_agent_instance: ArchitectAgent | None = None
 
 
-def get_architect_agent(api_key: Optional[str] = None) -> ArchitectAgent:
+def get_architect_agent(api_key: str | None = None) -> ArchitectAgent:
     """Retourne l'instance singleton de l'agent."""
     global _agent_instance
     if _agent_instance is None:
@@ -713,4 +1408,4 @@ if __name__ == "__main__":
     print(f"\n{'='*60}")
     print("  Tests terminés ✓")
     print("  → Prochaine étape : validator_agent.py")
-    print(f"{'='*60}\n")
+    print(f"{'='*60}\n") 

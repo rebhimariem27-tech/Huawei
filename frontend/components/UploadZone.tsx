@@ -113,8 +113,9 @@ export default function UploadZone() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+    <div className="upload-zone">
       <div
+        className="upload-dropzone"
         onDragOver={(e) => {
           e.preventDefault();
           setIsDragging(true);
@@ -131,33 +132,13 @@ export default function UploadZone() {
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
         }}
-        style={{
-          border: `1px dashed ${isDragging ? "var(--accent-live)" : "var(--border)"}`,
-          borderRadius: "var(--radius)",
-          padding: "1.1rem 0.9rem",
-          textAlign: "center",
-          cursor: "pointer",
-          background: isDragging ? "var(--surface-raised)" : "var(--surface)",
-          transition: "border-color 0.15s ease, background 0.15s ease",
-        }}
+        data-dragging={isDragging ? "true" : "false"}
       >
-        <p
-          style={{
-            margin: 0,
-            fontFamily: "var(--font-mono)",
-            fontSize: "0.78rem",
-            color: "var(--text-dim)",
-          }}
-        >
+        <UploadIcon active={isDragging} />
+        <p className="upload-dropzone__title">
           glisser un PDF Huawei ici
         </p>
-        <p
-          style={{
-            margin: "0.2rem 0 0",
-            fontSize: "0.72rem",
-            color: "var(--text-faint)",
-          }}
-        >
+        <p className="upload-dropzone__subtitle">
           ou cliquer pour parcourir
         </p>
         <input
@@ -171,13 +152,42 @@ export default function UploadZone() {
       </div>
 
       {uploads.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+        <div className="upload-list">
           {uploads.map((u) => (
             <UploadRow key={u.id} item={u} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function UploadIcon({ active }: { active: boolean }) {
+  const color = active ? "var(--brand-red)" : "var(--text-faint)";
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{ transition: "stroke 0.15s ease" }}
+      aria-hidden="true"
+    >
+      <path
+        d="M12 15.5V4M12 4L7.5 8.5M12 4L16.5 8.5"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.5 15.5V17.5C4.5 18.6 5.4 19.5 6.5 19.5H17.5C18.6 19.5 19.5 18.6 19.5 17.5V15.5"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -189,53 +199,35 @@ function UploadRow({ item }: { item: UploadItem }) {
       ? "status-dot--critical"
       : "status-dot--warn";
 
+  const accent =
+    item.status === "success"
+      ? "var(--accent-live)"
+      : item.status === "error"
+      ? "var(--accent-critical)"
+      : "var(--accent-warn)";
+
   return (
     <div
+      className="upload-row"
       style={{
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius)",
-        padding: "0.5rem 0.65rem",
-        fontSize: "0.78rem",
+        borderLeftColor: accent,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+      <div className="upload-row__head">
         <span className={`status-dot ${dotClass}`} />
-        <span style={{ color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span className="upload-row__name">
           {item.filename}
         </span>
       </div>
 
       {item.status === "uploading" && (
-        <div
-          style={{
-            marginTop: "0.35rem",
-            height: "3px",
-            borderRadius: "2px",
-            background: "var(--surface-raised)",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              height: "100%",
-              width: `${item.progress}%`,
-              background: "var(--accent-live)",
-              transition: "width 0.2s ease",
-            }}
-          />
+        <div className="upload-row__progress">
+          <div className="upload-row__progress-fill" style={{ width: `${item.progress}%` }} />
         </div>
       )}
 
       {item.message && (
-        <div
-          style={{
-            marginTop: "0.25rem",
-            fontFamily: "var(--font-mono)",
-            fontSize: "0.68rem",
-            color:
-              item.status === "error" ? "var(--accent-critical)" : "var(--text-faint)",
-          }}
-        >
+        <div className="upload-row__message">
           {item.message}
         </div>
       )}

@@ -92,7 +92,7 @@ class VisionConfig:
     mock_mode=True : aucun appel API (défaut — développement sans clé)
     domain_context : contexte métier injecté dans le prompt
     """
-    model:          str   = "meta-llama/llama-4-scout-17b-16e-instruct"
+    model:          str   = "qwen/qwen3.6-27b"
     max_tokens:     int   = 1024
     temperature:    float = 0.1       # réponses factuelles, pas créatives
     retry_attempts: int   = 3

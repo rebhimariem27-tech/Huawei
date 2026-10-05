@@ -1,14 +1,8 @@
 [
   {
-    "file_id": "8c9df04b1ebe",
+    "file_id": "1c71ea60a422",
     "filename": "Test2.pdf",
-    "ingested_at": "2026-07-08T10:15:41.588444",
-    "chunks_indexed": 13
-  },
-  {
-    "file_id": "f3d8d2c79f8d",
-    "filename": "Test2.pdf",
-    "ingested_at": "2026-07-08T10:21:29.672924",
+    "ingested_at": "2026-07-24T12:36:34.567115",
     "chunks_indexed": 13
   }
 ]

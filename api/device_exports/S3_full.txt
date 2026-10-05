@@ -1,0 +1,26 @@
+# Export S3 (192.168.56.12)
+# Copiez-collez le terminal eNSP ici
+
+[S3]display version
+--- résultat ---
+
+[S3]display current-configuration
+--- résultat ---
+
+[S3]display vlan
+--- résultat ---
+
+[S3]display interface brief
+--- résultat ---
+
+[S3]display ip routing-table
+--- résultat ---
+
+[S3]display cpu-usage
+--- résultat ---
+
+[S3]display memory-usage
+--- résultat ---
+
+[S3]display stp brief
+--- résultat ---

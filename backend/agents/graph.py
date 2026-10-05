@@ -54,7 +54,8 @@ from architect_agent     import architect_node,     get_architect_agent
 from documentalist_agent import documentalist_node, DocumentalistAgent
 from validator_agent     import validator_node,     get_validator_agent
 
-
+from fpdf import FPDF
+import re
 # ---------------------------------------------------------------------------
 # 1. ÉTAT DU GRAPHE
 # ---------------------------------------------------------------------------
@@ -95,7 +96,11 @@ class RAGState(TypedDict, total=False):
     rag_chunks_count:  int
     device_data:              dict      # ← AJOUTER
     manual_reference_text:    str       # ← AJOUTER
+    manual_reference_text_structured: str   # version sans image_desc, pour extraction
     manual_device_mapping:    dict      # ← AJOUTER (utilisé ailleurs)
+    mentioned_protos:         list      # ← AJOUT
+    mentioned_vlans:          list      # ← AJOUT
+    mentioned_devices:        list      # ← AJOUT
 
     # Validateur
     final_answer:      str
@@ -175,6 +180,8 @@ def _route_after_architect(state: RAGState) -> str:
     Sinon → flux normal vers le Documentaliste.
     """
     if state.get("step") == "architect_error":
+        return "validator"
+    if state.get("intent") == "design_update":
         return "validator"
     return "documentalist"
 
@@ -311,11 +318,7 @@ class RAGPipeline:
 
     def generate_health_report_if_requested(self, state: RAGState) -> Optional[str]:
         """
-    Génère le rapport de santé .md UNIQUEMENT si risk_requested=True
-    (coche cochée côté frontend) — plus de détection par mots-clés.
-
-    Returns:
-        Le chemin du fichier généré, ou None si pas demandé.
+    Génère le rapport de santé en PDF UNIQUEMENT si risk_requested=True.
     """
         if not state.get("risk_requested"):
             return None
@@ -323,16 +326,91 @@ class RAGPipeline:
         import datetime
         date_str = datetime.datetime.now().strftime("%Y%m%d_%H%M")
         devices = "_".join(state.get("devices_consulted", [])) or "rapport"
-        filename = f"Rapport_Sante_{devices}_{date_str}.md"
-        filepath = Path("reports") / filename
+        filename = f"Rapport_Sante_{devices}_{date_str}.pdf"
+        filepath = Path(__file__).parent.parent.parent / "reports" / filename
         filepath.parent.mkdir(exist_ok=True)
-
-        filepath.write_text(
-        state.get("final_answer", "Erreur : contenu vide"),
-        encoding="utf-8",
-    )
+        print(f"[ReportGen] Génération en cours → {filepath.resolve()}")
+        md_content = state.get("final_answer", "Erreur : contenu vide")
+        self._render_markdown_to_pdf(md_content, filepath)
+        exists = filepath.exists()
+        print(f"[ReportGen] Fichier créé : {exists} | taille={filepath.stat().st_size if exists else 0} octets")
+  
         return str(filepath)
 
+    def _sanitize_for_pdf(text: str) -> str:
+        """Remplace les caractères hors latin-1 (œ, æ, guillemets typographiques, tirets longs...)."""
+        replacements = {
+        "œ": "oe", "Œ": "OE",
+        "æ": "ae", "Æ": "AE",
+        "’": "'", "‘": "'",
+        "“": '"', "”": '"',
+        "–": "-", "—": "-",
+        "…": "...",
+        "\u00a0": " ",  # espace insécable
+    }
+        for bad, good in replacements.items():
+            text = text.replace(bad, good)
+        # Filet de sécurité : supprime tout caractère encore hors latin-1
+        return text.encode("latin-1", errors="replace").decode("latin-1")
+    @staticmethod
+    def _render_markdown_to_pdf(md_text: str, filepath: Path) -> None:
+        """Convertit un texte Markdown simple (titres, gras, listes) en PDF avec fpdf2."""
+        HUAWEI_RED = (207, 10, 44)
+        BLACK = (26, 26, 26)
+        md_text = RAGPipeline._sanitize_for_pdf(md_text)
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.set_margins(15, 15, 15)
+
+        def write_bold_line(text: str, size: int = 11):
+            """Gère le **gras** inline en alternant les segments."""
+            parts = re.split(r"(\*\*.*?\*\*)", text)
+            pdf.set_font("Helvetica", size=size)
+            for part in parts:
+                if part.startswith("**") and part.endswith("**"):
+                    pdf.set_font("Helvetica", "B", size)
+                    pdf.set_text_color(*HUAWEI_RED)
+                    pdf.write(6, part[2:-2])
+                    pdf.set_font("Helvetica", size=size)
+                    pdf.set_text_color(*BLACK)
+                elif part:
+                    pdf.write(6, part)
+            pdf.ln(6)
+
+        for raw_line in md_text.split("\n"):
+            line = raw_line.rstrip()
+
+            if not line:
+                pdf.ln(3)
+                continue
+
+            if line.startswith("### "):
+                pdf.set_font("Helvetica", "B", 12)
+                pdf.set_text_color(*HUAWEI_RED)
+                pdf.multi_cell(0, 7, line[4:])
+                pdf.set_text_color(*BLACK)
+            elif line.startswith("## "):
+                pdf.set_font("Helvetica", "B", 14)
+                pdf.set_text_color(*HUAWEI_RED)
+                pdf.multi_cell(0, 8, line[3:])
+                pdf.set_text_color(*BLACK)
+            elif line.startswith("# "):
+                pdf.set_font("Helvetica", "B", 16)
+                pdf.set_text_color(*HUAWEI_RED)
+                pdf.multi_cell(0, 9, line[2:])
+                pdf.set_text_color(*BLACK)
+            elif line.startswith("- ") or line.startswith("* "):
+                pdf.set_font("Helvetica", size=11)
+                pdf.set_text_color(*BLACK)
+                pdf.write(6, "  -  ")
+                write_bold_line(line[2:])
+            elif line.startswith("```"):
+                continue  # ignore les balises de bloc de code
+            else:
+                write_bold_line(line)
+
+        pdf.output(str(filepath))
 # ---------------------------------------------------------------------------
 # 4. POINT D'ENTRÉE — Tests interactifs
 # ---------------------------------------------------------------------------

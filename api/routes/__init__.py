@@ -20,9 +20,11 @@ USAGE DANS main.py :
 """
 
 from fastapi import APIRouter
-
+from . import devices as devices_routes
+from . import design as design_routes
 from . import query as query_routes
 from . import ingest as ingest_routes   # ← décommenté / ajouté
+from . import commands as commands_routes
 
 # ADAPTE / COMPLÈTE ICI au fur et à mesure des nouveaux routers :
 # from routes import ingest as ingest_routes
@@ -32,4 +34,7 @@ api_router = APIRouter()
 
 api_router.include_router(query_routes.router)
 api_router.include_router(ingest_routes.router)
+api_router.include_router(devices_routes.router)
+api_router.include_router(design_routes.router)
+api_router.include_router(commands_routes.router)
 # api_router.include_router(files_routes.router)
