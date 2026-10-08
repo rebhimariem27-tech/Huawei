@@ -27,26 +27,55 @@
 </div>
 
 ---
-
 ## 🎬 Démo
 
 <div align="center">
 
-<!-- Remplacer par votre GIF / vidéo (idéalement 1280×720, < 10 Mo) -->
-<img src="docs/assets/demo.gif" alt="Démo NetRAG" width="900"/>
+<img src="assets/demo.gif" alt="Démo NetRAG" width="900"/>
 
-<sub>▶️ Version complète : <a href="https://youtu.be/VOTRE_LIEN">vidéo de démonstration (3 min)</a></sub>
+<br/><br/>
+
+### ▶️ Démonstration complète — 3 min 37
+
+<a href="https://github.com/rebhimariem27-tech/Huawei/releases/latest/download/Demo_NetRAG.mp4">
+  🎥 <b>Regarder la démonstration complète</b>
+</a>
+
+<br/><br/>
+
+<sub>
+RAG multimodal • LangGraph multi-agents • Huawei eNSP •
+diagnostic réseau live • conformité • rapports de santé
+</sub>
 
 </div>
-
 ### Aperçu de l'interface
 
 | 💬 Chat technique | 📊 Tableau de bord |
 | :---: | :---: |
-| ![Chat](docs/assets/screenshot-chat.png) | ![Dashboard](docs/assets/screenshot-dashboard.png) |
-| **🗺️ Topologie réseau** | **📄 Rapports de santé** |
-| ![Topologie](docs/assets/screenshot-topology.png) | ![Rapports](docs/assets/screenshot-reports.png) |
+| <img src="assets/screenshot-chat.png" alt="Chat technique" width="450"/> | <img src="assets/screenshot-dashboard.png" alt="Tableau de bord" width="450"/> |
+| **🗺️ Topologie Live** | **📄 Rapports de santé** |
+| <img src="assets/screenshot-topology.png" alt="Topologie Live" width="450"/> | <img src="assets/screenshot-reports.png" alt="Rapports de santé PDF" width="450"/> |
 
+<details>
+<summary><b>Voir les autres vues</b></summary>
+
+| 🛡️ Audits de conformité | 🔌 Équipements en direct |
+| :---: | :---: |
+| <img src="assets/screenshot-audits.png" alt="Audits" width="450"/> | <img src="assets/screenshot-equipments.png" alt="Équipements" width="450"/> |
+| **🚀 Assistant de déploiement** | **🛠️ Remédiation** |
+| <img src="assets/screenshot-deployment.png" alt="Déploiement" width="450"/> | <img src="assets/screenshot-remediation.png" alt="Remédiation" width="450"/> |
+| **🕘 Historique des conversations** | **📚 Documents indexés** |
+| <img src="assets/screenshot-history.png" alt="Historique" width="450"/> | <img src="assets/screenshot-documents.png" alt="Documents" width="450"/> |
+
+</details>
+
+### Lab eNSP utilisé
+
+<div align="center">
+<img src="assets/lab-ensp.png" alt="Topologie du lab eNSP : R1, S1, S3 et Cloud" width="600"/>
+<br/><sub>Lab eNSP : routeur R1, switches S1 et S3, reliés au réseau hôte via Cloud2</sub>
+</div>
 ### Scénario de démonstration
 
 | Étape | Action | Ce que vous voyez |
