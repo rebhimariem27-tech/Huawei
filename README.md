@@ -27,15 +27,26 @@
 </div>
 
 ---
-
 ## 🎬 Démo
 
 <div align="center">
 
-<!-- Remplacer par votre GIF / vidéo (idéalement 1280×720, < 10 Mo) -->
 <img src="assets/demo.gif" alt="Démo NetRAG" width="900"/>
 
-<sub>▶️ Version complète : <a href="https://youtu.be/VOTRE_LIEN">vidéo de démonstration (3 min)</a></sub>
+<br/><br/>
+
+### ▶️ Démonstration complète — 3 min 37
+
+<a href="https://github.com/rebhimariem27-tech/Huawei/releases/latest/download/Demo_NetRAG.mp4">
+  🎥 <b>Regarder la démonstration complète</b>
+</a>
+
+<br/><br/>
+
+<sub>
+RAG multimodal • LangGraph multi-agents • Huawei eNSP •
+diagnostic réseau live • conformité • rapports de santé
+</sub>
 
 </div>
 ### Aperçu de l'interface
